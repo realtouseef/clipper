@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="120 52 400 500">
+  <defs>
+    <clipPath id="slate">
+      <rect x="145" y="111" width="335" height="80" rx="14"/>
+    </clipPath>
+  </defs>
+  <!-- Clapper stick, tilted open -->
+  <g transform="rotate(-14 312 151)">
+    <rect x="145" y="111" width="335" height="80" rx="14" fill="#3b4254"/>
+    <g clip-path="url(#slate)" fill="#f2c14e">
+      <polygon points="200,111 240,111 228,191 188,191"/>
+      <polygon points="283,111 323,111 311,191 271,191"/>
+      <polygon points="366,111 406,111 394,191 354,191"/>
+      <polygon points="449,111 489,111 477,191 437,191"/>
+    </g>
+  </g>
+  <!-- Clapper base -->
+  <rect x="160" y="242" width="337" height="47" rx="15" fill="#3b4254"/>
+  <!-- Body -->
+  <rect x="170" y="290" width="318" height="252" rx="46" fill="#222836"/>
+  <!-- Eyes -->
+  <circle cx="272" cy="383" r="33" fill="#ffffff"/>
+  <circle cx="277" cy="388" r="16" fill="#121826"/>
+  <circle cx="385" cy="383" r="33" fill="#ffffff"/>
+  <circle cx="389" cy="388" r="16" fill="#121826"/>
+  <!-- Smile -->
+  <path d="M291 458 Q330 490 367 458" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round"/>
+  <!-- Blush -->
+  <circle cx="450" cy="495" r="19" fill="#e5566a"/>
+</svg>

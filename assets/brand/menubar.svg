@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="120 52 400 500">
+  <!-- Menu bar (template) version of the mascot: one color, with the stripes, eyes and smile cut out. -->
+  <defs>
+    <mask id="cut">
+      <rect x="0" y="0" width="700" height="700" fill="white"/>
+      <g transform="rotate(-14 312 151)" fill="black">
+        <polygon points="214,111 250,111 240,191 204,191"/>
+        <polygon points="300,111 336,111 326,191 290,191"/>
+        <polygon points="386,111 422,111 412,191 376,191"/>
+      </g>
+      <circle cx="272" cy="390" r="36" fill="black"/>
+      <circle cx="385" cy="390" r="36" fill="black"/>
+      <path d="M287 468 Q330 506 371 468" fill="none" stroke="black" stroke-width="22" stroke-linecap="round"/>
+    </mask>
+  </defs>
+  <g mask="url(#cut)" fill="black">
+    <rect x="145" y="111" width="335" height="80" rx="16" transform="rotate(-14 312 151)"/>
+    <rect x="160" y="236" width="337" height="50" rx="16"/>
+    <rect x="170" y="296" width="318" height="246" rx="54"/>
+  </g>
+</svg>
