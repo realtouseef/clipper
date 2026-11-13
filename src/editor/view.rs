@@ -5,6 +5,7 @@
 //! background thread; while dragging it renders a half-resolution proxy and re-renders at
 //! full quality when idle. Selection handles, guides and the crop frame are drawn on top.
 
+use crate::theme as tk;
 use super::canvas::{self, Handle, Map, PointHandle};
 use super::doc::*;
 use super::export::{self, Format};
@@ -12,7 +13,7 @@ use super::render::{self, Cache};
 use super::{icons, spline, stickers, text};
 use crate::ui;
 use gpui_kit::AnimationExt;
-use crate::{BG, GREEN, MUTED, ON_GREEN, RAISED, TEXT};
+
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::color_picker::{ColorPickerEvent, ColorPickerState};
 use gpui_kit::component::input::{InputEvent, InputState};
@@ -2642,7 +2643,7 @@ impl EditorView {
         let pct = (k * window.scale_factor() * 100.0).round();
         let icon_btn = |id: &'static str, icon: Icon, tip: &'static str| Button::new(id).cursor_pointer().ghost().small().icon(icon).tooltip(tip);
         // Related controls share a pill-shaped group.
-        let group = || div().flex().items_center().gap(px(2.)).p(px(3.)).rounded_full().bg(rgb(RAISED)).border_1().border_color(ui::hairline());
+        let group = || div().flex().items_center().gap(px(2.)).p(px(3.)).rounded_full().bg(rgb(tk::raised())).border_1().border_color(ui::hairline());
         div()
             .h(px(56.))
             .flex_none()
@@ -2661,7 +2662,7 @@ impl EditorView {
             .child(
                 group()
                     .child(icon_btn("zoom-out", icons::zoom_out(), "Zoom out  ⌘−").rounded_full().on_click(cx.listener(|v, _: &ClickEvent, _, cx| v.zoom_by(0.8, None, cx))))
-                    .child(div().w(px(48.)).text_center().text_sm().font_weight(FontWeight::MEDIUM).text_color(rgb(TEXT)).child(format!("{pct}%")))
+                    .child(div().w(px(48.)).text_center().text_sm().font_weight(FontWeight::MEDIUM).text_color(rgb(tk::text())).child(format!("{pct}%")))
                     .child(icon_btn("zoom-in", icons::zoom_in(), "Zoom in  ⌘=").rounded_full().on_click(cx.listener(|v, _: &ClickEvent, _, cx| v.zoom_by(1.25, None, cx))))
                     .child(div().w(px(1.)).h(px(16.)).mx(px(2.)).bg(ui::hairline_strong()))
                     .child(Button::new("fit").cursor_pointer().ghost().small().rounded_full().label("Fit").tooltip("Fit  ⌘0").selected(self.zoom.is_none()).on_click(cx.listener(|v, _: &ClickEvent, _, cx| v.zoom_fit(cx))))
@@ -2676,7 +2677,7 @@ impl EditorView {
                     .gap(px(6.))
                     .mr(px(ui::S2))
                     .text_xs()
-                    .text_color(rgb(MUTED))
+                    .text_color(rgb(tk::muted()))
                     .child(icons::lock().xsmall())
                     .child("Project file keeps the original. Do not share it.")
                     .tooltip(|w, cx| {
@@ -2711,8 +2712,8 @@ impl EditorView {
                     .gap(px(2.))
                     .rounded(px(12.))
                     .cursor_pointer()
-                    .when(on, |d| d.bg(ui::accent_tint()).text_color(rgb(GREEN)))
-                    .when(!on, |d| d.text_color(rgb(MUTED)).hover(|d| d.bg(rgb(RAISED)).text_color(rgb(TEXT))))
+                    .when(on, |d| d.bg(ui::accent_tint()).text_color(rgb(tk::green_ink())))
+                    .when(!on, |d| d.text_color(rgb(tk::muted())).hover(|d| d.bg(rgb(tk::raised())).text_color(rgb(tk::text()))))
                     .child(tool.icon().size(px(20.)))
                     .child(div().text_size(px(10.)).font_weight(FontWeight::MEDIUM).child(tool.short()))
                     .tooltip(move |w, cx| gpui_kit::component::tooltip::Tooltip::new(tip.clone()).build(w, cx))
@@ -2748,7 +2749,7 @@ impl EditorView {
                 out.push(div().absolute().left(px(x)).top(px(y)).w(px(w.max(0.0))).h(px(h.max(0.0))).bg(dim).into_any_element());
             }
             out.push(
-                div().absolute().left(px(tl.x)).top(px(tl.y)).w(px(br.x - tl.x)).h(px(br.y - tl.y)).border_2().border_color(rgb(GREEN)).into_any_element(),
+                div().absolute().left(px(tl.x)).top(px(tl.y)).w(px(br.x - tl.x)).h(px(br.y - tl.y)).border_2().border_color(rgb(tk::green())).into_any_element(),
             );
             for (ex, ey) in [(-1i8, -1i8), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0)] {
                 let hx = tl.x + (ex as f32 + 1.0) / 2.0 * (br.x - tl.x);
@@ -2763,10 +2764,10 @@ impl EditorView {
                     .px_2()
                     .py_1()
                     .rounded(px(6.))
-                    .bg(rgb(GREEN))
+                    .bg(rgb(tk::green()))
                     .text_xs()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(rgb(ON_GREEN))
+                    .text_color(rgb(tk::on_green()))
                     .child(format!("{} × {}", c.w.round(), c.h.round()))
                     .into_any_element(),
             );
@@ -2803,7 +2804,7 @@ impl EditorView {
                                 .bg(hsla(0.11, 0.9, 0.12, 0.85))
                                 .text_size(px(11.))
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(rgb(0xffb020))
+                                .text_color(rgb(tk::DARK.warn))
                                 .child("Low resolution")
                                 .into_any_element(),
                         );
@@ -2817,9 +2818,9 @@ impl EditorView {
                 let b = t.outer_bounds();
                 let tl = rel(map.to_screen(p(b.x, b.y)));
                 let br = rel(map.to_screen(p(b.right(), b.bottom())));
-                out.push(div().absolute().left(px(tl.x - 3.0)).top(px(tl.y - 3.0)).w(px(br.x - tl.x + 6.0)).h(px(br.y - tl.y + 6.0)).rounded(px(4.)).border_2().border_dashed().border_color(rgb(GREEN)).into_any_element());
+                out.push(div().absolute().left(px(tl.x - 3.0)).top(px(tl.y - 3.0)).w(px(br.x - tl.x + 6.0)).h(px(br.y - tl.y + 6.0)).rounded(px(4.)).border_2().border_dashed().border_color(rgb(tk::green())).into_any_element());
                 let q = rel(map.to_screen(at));
-                out.push(div().absolute().left(px(q.x - 7.0)).top(px(q.y - 7.0)).size(px(14.)).rounded_full().bg(rgb(GREEN)).border_2().border_color(rgb(0xffffff)).into_any_element());
+                out.push(div().absolute().left(px(q.x - 7.0)).top(px(q.y - 7.0)).size(px(14.)).rounded_full().bg(rgb(tk::green())).border_2().border_color(rgb(0xffffff)).into_any_element());
             }
         }
 
@@ -2837,7 +2838,7 @@ impl EditorView {
                     .h(px(br.y - tl.y + 4.0))
                     .border_1()
                     .when(editing, |d| d.border_dashed())
-                    .border_color(rgb(if o.locked { MUTED } else { SELECT }))
+                    .border_color(rgb(if o.locked { tk::muted() } else { SELECT }))
                     .into_any_element(),
             );
             if o.locked {
@@ -2848,7 +2849,7 @@ impl EditorView {
                         .top(px(tl.y - 12.0))
                         .p_1()
                         .rounded_full()
-                        .bg(rgb(RAISED))
+                        .bg(rgb(tk::raised()))
                         .child(icons::lock().xsmall())
                         .into_any_element(),
                 );
@@ -2919,7 +2920,7 @@ impl EditorView {
                             .top(px(q.y - 6.0))
                             .size(px(12.))
                             .rounded(px(3.))
-                            .bg(rgb(if on { GREEN } else { 0xffffff }))
+                            .bg(rgb(if on { tk::green() } else { 0xffffff }))
                             .border_2()
                             .border_color(rgb(SELECT))
                             .into_any_element()
@@ -2985,7 +2986,7 @@ impl EditorView {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .child(div().text_base().font_weight(FontWeight::SEMIBOLD).text_color(rgb(TEXT)).child("Export"))
+                    .child(div().text_base().font_weight(FontWeight::SEMIBOLD).text_color(rgb(tk::text())).child("Export"))
                     .child(ui::kbd("⌘E")),
             )
             .child(ui::field("Format", None, ui::segmented("format", formats)))
@@ -3015,7 +3016,7 @@ fn handle_dot(x: f32, y: f32, green: bool) -> gpui_kit::AnyElement {
         .rounded(px(3.))
         .bg(rgb(0xffffff))
         .border_2()
-        .border_color(rgb(if green { GREEN } else { SELECT }))
+        .border_color(rgb(if green { tk::green() } else { SELECT }))
         .into_any_element()
 }
 
@@ -3091,7 +3092,7 @@ impl Render for EditorView {
             .flex_1()
             .relative()
             .overflow_hidden()
-            .bg(rgb(BG))
+            .bg(rgb(tk::bg()))
             .cursor(cursor_style)
             .child(canvas(move |b, _, _| store.set(b), |_, _, _, _| {}).absolute().size_full())
             .children(self.image.clone().map(|image| {
@@ -3134,7 +3135,7 @@ impl Render for EditorView {
                 v.zoom_by((1.0 + ev.delta).clamp(0.5, 2.0), Some(at), cx);
             }))
             // Drop pictures to merge them in.
-            .drag_over::<gpui_kit::ExternalPaths>(|d, _, _, _| d.border_2().border_color(rgb(GREEN)))
+            .drag_over::<gpui_kit::ExternalPaths>(|d, _, _, _| d.border_2().border_color(rgb(tk::green_ink())))
             .on_drop(cx.listener(|v, paths: &gpui_kit::ExternalPaths, _, cx| v.add_images(paths.paths().to_vec(), cx)));
 
         let toast = self.toast.as_ref().map(|t| {
@@ -3150,10 +3151,10 @@ impl Render for EditorView {
                 .justify_center()
                 .child(
                     ui::toast_pill()
-                        .child(div().size(px(8.)).rounded_full().bg(rgb(if ok { GREEN } else { crate::RED })))
+                        .child(div().size(px(8.)).rounded_full().bg(rgb(if ok { tk::green() } else { tk::red() })))
                         .child(t.text.clone())
                         .children(reveal.map(|path| {
-                            Button::new("reveal").cursor_pointer().ghost().xsmall().rounded_full().text_color(rgb(GREEN)).label("Show in Finder").on_click(move |_: &ClickEvent, _, cx| cx.reveal_path(&path))
+                            Button::new("reveal").cursor_pointer().ghost().xsmall().rounded_full().text_color(rgb(tk::green_ink())).label("Show in Finder").on_click(move |_: &ClickEvent, _, cx| cx.reveal_path(&path))
                         }))
                         .when(self.toast.as_ref().is_some_and(|t| t.reveal.is_none()), |d| d.pr(px(ui::S4)))
                         .with_animation(id, gpui_kit::Animation::new(ui::ENTER).with_easing(ui::ease_out), |el, t| el.opacity(t).mb(px((1.0 - t) * -8.0))),
@@ -3165,8 +3166,8 @@ impl Render for EditorView {
             .size_full()
             .flex()
             .flex_col()
-            .bg(rgb(BG))
-            .text_color(rgb(TEXT))
+            .bg(rgb(tk::bg()))
+            .text_color(rgb(tk::text()))
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::on_key))
             .on_mouse_move(cx.listener(|v, ev: &MouseMoveEvent, _, cx| {

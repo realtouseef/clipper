@@ -8,6 +8,7 @@
 //! The mic on/off here decides whether audio is captured at all; the control bar's mute is
 //! separate (it records silence inside a captured track).
 
+use crate::theme as tk;
 use crate::recorder::{self, DEFAULT_MIC, sessions_root};
 use gpui_kit::component::progress::Progress;
 use crate::dropdown::{Dropdown, DropdownEvent};
@@ -22,8 +23,6 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
 const SYSTEM_DEFAULT: &str = "System default";
-const METER: u32 = crate::GREEN;
-const METER_HOT: u32 = crate::RED;
 
 pub struct MicSettings {
     enabled: bool,
@@ -197,7 +196,7 @@ impl Render for MicSettings {
                         div().flex_1().child(
                             Progress::new("mic-level")
                                 .value(if self.enabled { self.level * 100.0 } else { 0.0 })
-                                .color(rgb(if self.level > 0.95 { METER_HOT } else { METER }))
+                                .color(rgb(if self.level > 0.95 { tk::red() } else { tk::green() }))
                                 .accessibility_label("Microphone input level"),
                         ),
                     ),

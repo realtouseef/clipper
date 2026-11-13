@@ -1,8 +1,9 @@
 //! Screenshots in the main window: the capture flow (hotkey or Screenshot button), the
 //! Screenshot tab (mode, delay, cursor, folder) and the recent screenshots strip.
 
+use crate::theme as tk;
 use crate::screenshot::{self, Mode, cards, capture, library, picker};
-use crate::{Clipper, MUTED, Stage, TEXT, note};
+use crate::{Clipper, Stage, note};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{Disableable, Sizable};
@@ -276,7 +277,7 @@ impl Clipper {
             .flex()
             .flex_col()
             .gap_2()
-            .child(div().text_xs().text_color(rgb(MUTED)).truncate().child(folder.display().to_string()))
+            .child(div().text_xs().text_color(rgb(tk::muted())).truncate().child(folder.display().to_string()))
             .child(
                 div()
                     .flex()
@@ -313,13 +314,13 @@ impl Clipper {
                 .rounded_full()
                 .border_2()
                 .border_color(rgb(0xffffff))
-                .bg(if picked { gpui_kit::Hsla::from(rgb(crate::GREEN)) } else { gpui_kit::hsla(0., 0., 0., 0.35) })
+                .bg(if picked { gpui_kit::Hsla::from(rgb(tk::green())) } else { gpui_kit::hsla(0., 0., 0., 0.35) })
                 .flex()
                 .items_center()
                 .justify_center()
                 .text_size(px(11.))
                 .font_weight(gpui_kit::FontWeight::BOLD)
-                .text_color(rgb(crate::ON_GREEN))
+                .text_color(rgb(tk::on_green()))
                 .when(picked, |d| d.child("✓"))
                 .cursor_pointer()
                 .tooltip(|w, cx| gpui_kit::component::tooltip::Tooltip::new("Pick to merge").build(w, cx))
@@ -342,9 +343,9 @@ impl Clipper {
                     .overflow_hidden()
                     .rounded(px(10.))
                     .border_2()
-                    .border_color(if picked { gpui_kit::Hsla::from(rgb(crate::GREEN)) } else { crate::ui::hairline() })
+                    .border_color(if picked { gpui_kit::Hsla::from(rgb(tk::green_ink())) } else { crate::ui::hairline() })
                     .cursor_pointer()
-                    .hover(|d| d.border_color(rgb(TEXT)))
+                    .hover(|d| d.border_color(rgb(tk::text())))
                     .child(img(thumb.clone()).w(px(TILE_W - 4.)).h(px(TILE_H - 4.)).flex_none().rounded(px(8.)).object_fit(ObjectFit::Cover))
                     .child(check)
                     .on_click(move |_: &ClickEvent, _, cx| crate::editor::view::open(open_path.clone(), cx)),
@@ -412,12 +413,12 @@ impl Clipper {
             .border_color(crate::ui::hairline_strong())
             .cursor_pointer()
             .hover(|d| d.bg(crate::ui::accent_tint()))
-            .drag_over::<gpui_kit::ExternalPaths>(|d, _, _, _| d.bg(crate::ui::accent_tint()).border_color(rgb(crate::GREEN)))
+            .drag_over::<gpui_kit::ExternalPaths>(|d, _, _, _| d.bg(crate::ui::accent_tint()).border_color(rgb(tk::green_ink())))
             .child(div().flex().items_center().gap_2().text_sm().child(crate::editor::icons::image().size(px(16.))).child("Edit an image"))
-            .child(div().text_xs().text_color(rgb(MUTED)).child("Drop PNG, JPG, HEIC… here, or click to choose"))
+            .child(div().text_xs().text_color(rgb(tk::muted())).child("Drop PNG, JPG, HEIC… here, or click to choose"))
             .on_click(cx.listener(|c, _: &ClickEvent, _, cx| c.choose_images(cx)))
             .on_drop(cx.listener(|c, paths: &gpui_kit::ExternalPaths, _, cx| c.edit_images(paths.paths().to_vec(), cx)));
-        let import_error = self.shot_error.clone().map(|e| div().text_xs().text_color(rgb(0xffb4a8)).child(e));
+        let import_error = self.shot_error.clone().map(|e| div().text_xs().text_color(rgb(tk::error())).child(e));
         let busy = self.shot_busy || matches!(self.stage, Stage::Starting | Stage::Recording);
         div()
             .flex()

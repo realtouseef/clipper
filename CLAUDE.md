@@ -10,6 +10,10 @@ other are one enum (`Stage`, `timeline::Gesture`, `webcam::LivePreview`, `cam_bu
 `editor::view::RenderState`, …), never a set of booleans. Debug builds print
 `state invariant broken: …` on stderr when `Stage` and its data disagree.
 
+- `src/theme.rs`: light and dark palettes and the Auto/Light/Dark choice. Views take every
+  color from a semantic token (`tk::text()`, `tk::card()`, `tk::ink(alpha)` for overlays,
+  `tk::green_ink()` for green as text/outline); never a raw hex. Surfaces that always sit on
+  dark pixels (region selector, screen picker, video overlays) use `tk::DARK` directly.
 - `src/editing/`: trim/split/cut logic (pure, unit tested); everything downstream reads
   raw time through `EditList::source_to_output` / `output_to_source`.
 - `src/cutting.rs`: the edit list wired into the app (undo, derived preview data).
@@ -39,6 +43,7 @@ focus (a covered window doesn't redraw, so screenshot it while visible).
 | `CLIPPER_PRESET=<compare\|side\|single>` | Apply a merge preset when the editor opens. |
 | `CLIPPER_BAR_CAPTURABLE=1` | Let screenshots capture the control bar and selector (normally hidden from capture). |
 | `CLIPPER_KEEP=<dir>` | Tests keep their rendered output. |
+| `CLIPPER_THEME=<light\|dark\|system>` | Override the saved appearance for this run. |
 
 Copy a session to a scratch folder before opening it: the editor writes `edits.json` and
 `preview/` next to the recording (the raw files are never modified).

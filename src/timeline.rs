@@ -4,11 +4,10 @@
 //! The timeline shows the edited clip: kept segments end to end on the output timeline.
 //! Zoom regions and the playhead live in raw recording time and are mapped for display.
 
+use crate::theme as tk;
 use crate::editing::{self, remap};
 use crate::zoom::{self, DEPTHS, ZoomRegion};
-use crate::{
-    CARD, Clipper, GREEN, LINE, MUTED, ON_GREEN, R_CARD, RAISED, RED, Stage, TEXT, button, field, note, section,
-};
+use crate::{Clipper, R_CARD, Stage, button, field, note, section};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::switch::Switch;
@@ -38,8 +37,6 @@ const MAX_PPS: f64 = 600.0;
 const OUTER: f32 = crate::GAP;
 
 // Zoom blocks: deep green, solid green when selected.
-const ZOOM_BG: u32 = 0x233119;
-const ZOOM_LINE: u32 = 0x3d5a2c;
 
 const DEPTH_LABELS: [&str; 5] = ["1.25×", "1.5×", "2×", "2.5×", "3×"];
 
@@ -438,7 +435,7 @@ impl Clipper {
             .flex_col()
             .gap(px(ROW_GAP))
             .text_xs()
-            .text_color(rgb(MUTED))
+            .text_color(rgb(tk::muted()))
             .child(div().h(px(RULER_H)))
             .child(label("Video", VIDEO_H))
             .child(label("Audio", AUDIO_H))
@@ -469,8 +466,8 @@ impl Clipper {
                     .items_end()
                     .gap_1()
                     .text_size(px(10.))
-                    .text_color(rgb(MUTED))
-                    .child(div().w(px(1.)).h(px(6.)).bg(rgb(LINE)))
+                    .text_color(rgb(tk::muted()))
+                    .child(div().w(px(1.)).h(px(6.)).bg(rgb(tk::line())))
                     .child(if step < 1.0 { clock(t) } else { format!("{}:{:02}", (t / 60.0) as u32, (t % 60.0).round() as u32 % 60) })
             }));
 
@@ -495,7 +492,7 @@ impl Clipper {
                     .w(px(inner))
                     .h_full()
                     .rounded(px(8.))
-                    .bg(rgb(RAISED))
+                    .bg(rgb(tk::raised()))
                     .overflow_hidden()
                     .cursor_pointer();
                 if let Some(p) = self.preview.as_ref().filter(|p| !p.frames.is_empty()) {
@@ -520,7 +517,7 @@ impl Clipper {
                     }
                 }
                 block = block
-                    .when(sel, |d| d.child(div().absolute().inset_0().rounded(px(8.)).bg(hsla(96. / 360., 0.85, 0.72, 0.18)).border_2().border_color(rgb(GREEN))))
+                    .when(sel, |d| d.child(div().absolute().inset_0().rounded(px(8.)).bg(hsla(96. / 360., 0.85, 0.72, 0.18)).border_2().border_color(rgb(tk::green()))))
                     .when(!sel, |d| d.child(div().absolute().inset_0().rounded(px(8.)).border_1().border_color(hsla(0., 0., 1., 0.10))))
                     .on_mouse_down(
                         MouseButton::Left,
@@ -558,6 +555,31 @@ impl Clipper {
             }
         }
 
+        // Empty state: say where the clip will show up instead of an empty row.
+        let empty_hint = match self.stage {
+            Stage::Idle => Some("Your recording shows up here. Press Record to start."),
+            Stage::Starting | Stage::Recording => Some("Recording…"),
+            Stage::Processing => Some("Preparing preview…"),
+            _ => None,
+        };
+        if let (false, Some(hint)) = (editing, empty_hint) {
+            video = video.child(
+                div()
+                    .absolute()
+                    .inset_0()
+                    .rounded(px(8.))
+                    .border_1()
+                    .border_dashed()
+                    .border_color(crate::ui::hairline_strong())
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_xs()
+                    .text_color(rgb(tk::muted()))
+                    .child(hint),
+            );
+        }
+
         // Audio: the waveform read through the edit, over each segment's block.
         let mut audio = div().relative().h(px(AUDIO_H)).w_full();
         if editing {
@@ -574,7 +596,7 @@ impl Clipper {
                             .w(px(bw.max(1.0)))
                             .h_full()
                             .rounded(px(6.))
-                            .bg(if sel { hsla(96. / 360., 0.85, 0.72, 0.14) } else { hsla(0., 0., 1., 0.04) }),
+                            .bg(if sel { tk::green_tint(0.14) } else { tk::ink(0.04) }),
                     );
                 }
             }
@@ -601,7 +623,7 @@ impl Clipper {
                                 let h = ((v / peak).sqrt() * (bh - 4.0)).max(1.0);
                                 window.paint_quad(gpui_kit::fill(
                                     Bounds::new(point(px(bx + cx_), px(by + (bh - h) / 2.0)), size(px(col - 0.5), px(h))),
-                                    hsla(96. / 360., 0.6, 0.66, 0.85),
+                                    if tk::is_light() { hsla(96. / 360., 0.55, 0.42, 0.85) } else { hsla(96. / 360., 0.6, 0.66, 0.85) },
                                 ));
                                 cx_ += col;
                             }
@@ -611,7 +633,7 @@ impl Clipper {
                     .inset_0(),
                 );
             } else {
-                audio = audio.child(div().absolute().inset_0().flex().items_center().pl_2().text_xs().text_color(rgb(MUTED)).child("No audio"));
+                audio = audio.child(div().absolute().inset_0().flex().items_center().pl_2().text_xs().text_color(rgb(tk::muted())).child("No audio"));
             }
         }
 
@@ -620,7 +642,7 @@ impl Clipper {
             let spans = self.recording.as_ref().and_then(|r| r.webcam.as_ref()).map(|t| remap::spans(&t.spans, &self.edit)).unwrap_or_default();
             div().relative().h(px(CAM_H)).w_full().children(spans.into_iter().filter_map(|(a, b)| {
                 let (x, bw) = (x_of(a), ((b - a) * pps) as f32);
-                visible(x, bw).then(|| div().absolute().left(px(x)).top(px(3.)).w(px(bw.max(2.0))).h(px(CAM_H - 6.0)).rounded_full().bg(hsla(210. / 360., 0.7, 0.65, 0.7)))
+                visible(x, bw).then(|| div().absolute().left(px(x)).top(px(3.)).w(px(bw.max(2.0))).h(px(CAM_H - 6.0)).rounded_full().bg(if tk::is_light() { hsla(210. / 360., 0.7, 0.55, 0.75) } else { hsla(210. / 360., 0.7, 0.65, 0.7) }))
             }))
         });
 
@@ -636,13 +658,13 @@ impl Clipper {
                         .w(px((bw - 1.0).max(2.0)))
                         .h_full()
                         .rounded(px(5.))
-                        .bg(hsla(0., 0., 1., 0.08))
+                        .bg(tk::ink(0.08))
                         .overflow_hidden()
                         .px_1()
                         .flex()
                         .items_center()
                         .text_size(px(10.))
-                        .text_color(rgb(0xd4d4d8))
+                        .text_color(rgb(tk::text_soft()))
                         .child(div().truncate().child(c.text.replace('\n', " ")))
                 })
             }))
@@ -658,7 +680,7 @@ impl Clipper {
             .w_full()
             .rounded(px(8.))
             .border_1()
-            .border_color(rgb(LINE))
+            .border_color(rgb(tk::line()))
             .border_dashed()
             .on_mouse_down(
                 MouseButton::Left,
@@ -672,7 +694,7 @@ impl Clipper {
                 }),
             )
             .when(editing && self.zooms.is_empty(), |d| {
-                d.flex().items_center().justify_center().text_xs().text_color(rgb(MUTED)).child("Double-click to add a zoom, or press Z")
+                d.flex().items_center().justify_center().text_xs().text_color(rgb(tk::muted())).child("Double-click to add a zoom, or press Z")
             });
         if editing {
             for (i, r) in self.zooms.iter().enumerate() {
@@ -706,9 +728,9 @@ impl Clipper {
                             .w(px(bw))
                             .h_full()
                             .rounded(px(8.))
-                            .bg(rgb(if selected { GREEN } else { ZOOM_BG }))
+                            .bg(rgb(if selected { tk::green() } else { tk::zoom_bg() }))
                             .border_1()
-                            .border_color(rgb(if selected { GREEN } else { ZOOM_LINE }))
+                            .border_color(rgb(if selected { tk::green_ink() } else { tk::zoom_line() }))
                             .overflow_hidden()
                             .cursor(CursorStyle::OpenHand)
                             .flex()
@@ -716,7 +738,7 @@ impl Clipper {
                             .justify_center()
                             .text_xs()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(rgb(if selected { ON_GREEN } else { GREEN }))
+                            .text_color(rgb(if selected { tk::on_green() } else { tk::green_ink() }))
                             .child(div().truncate().px_2().child(text))
                             .on_mouse_down(MouseButton::Left, cx.listener(move |this, ev: &MouseDownEvent, window, cx| this.on_zoom_down(i, ZoomDrag::Move { grab: 0.0 }, ev, window, cx)))
                             .when(lo == r.start, |d| d.child(zhandle(ZoomDrag::Start, "zs", cx).left_0()))
@@ -741,7 +763,7 @@ impl Clipper {
                         .left(px(x - if real { 1.5 } else { 0.5 }))
                         .w(px(if real { 3.0 } else { 1.0 }))
                         .rounded_full()
-                        .bg(if real { gpui_kit::Hsla::from(rgb(RED)) } else { hsla(0., 0., 1., 0.5) })
+                        .bg(if real { gpui_kit::Hsla::from(rgb(tk::red())) } else { tk::ink(0.5) })
                 })
             })
         });
@@ -754,8 +776,8 @@ impl Clipper {
                 .bottom_0()
                 .left(px(x - 1.0))
                 .w(px(2.))
-                .bg(rgb(TEXT))
-                .child(div().absolute().top(px(-3.)).left(px(-4.)).size(px(10.)).rounded_full().bg(rgb(TEXT)))
+                .bg(rgb(tk::text()))
+                .child(div().absolute().top(px(-3.)).left(px(-4.)).size(px(10.)).rounded_full().bg(rgb(tk::text())))
         });
 
         // A thin bar showing what part of the clip is in view while zoomed in.
@@ -769,7 +791,7 @@ impl Clipper {
                     .left(px(scroll / content * w))
                     .w(px((w / content * w).max(24.0)))
                     .rounded_full()
-                    .bg(hsla(0., 0., 1., 0.25)),
+                    .bg(tk::ink(0.25)),
             )
         });
 
@@ -805,7 +827,7 @@ impl Clipper {
             .pt_2()
             .pb_3()
             .rounded(px(R_CARD))
-            .bg(rgb(CARD))
+            .bg(rgb(tk::card()))
             .child(self.timeline_toolbar(cx))
             .child(div().flex().gap(px(GAP)).child(labels).child(track))
     }
@@ -836,7 +858,7 @@ impl Clipper {
         let lengths = edited.then(|| {
             div()
                 .text_xs()
-                .text_color(rgb(MUTED))
+                .text_color(rgb(tk::muted()))
                 .child(format!("{} → {}  ·  {:.1} s removed", clock(self.duration()), clock(d), self.edit.removed(self.duration())))
         });
 
@@ -898,7 +920,7 @@ impl Clipper {
                     .items_center()
                     .gap_1()
                     .text_xs()
-                    .text_color(rgb(MUTED))
+                    .text_color(rgb(tk::muted()))
                     .child("Undo all cuts?")
                     .child(Button::new("reset-yes").cursor_pointer().danger().xsmall().rounded_full().label("Reset").on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                         this.reset_edits();
@@ -959,7 +981,7 @@ impl Clipper {
                 this.suggest_zooms();
                 cx.notify();
             }));
-        let sep = || div().w(px(1.)).h(px(20.)).bg(rgb(LINE));
+        let sep = || div().w(px(1.)).h(px(20.)).bg(rgb(tk::line()));
         div()
             .h(px(TOOLBAR_H))
             .flex()
@@ -1010,7 +1032,7 @@ impl Clipper {
             .ghost()
             .xsmall()
             .rounded_full()
-            .text_color(rgb(crate::RED))
+            .text_color(rgb(tk::red()))
             .label(match self.zooms.len() {
                 1 => "Remove the zoom".to_string(),
                 n => format!("Remove all {n} zooms"),
@@ -1140,7 +1162,7 @@ impl Clipper {
                     .rounded_full()
                     .border_2()
                     .border_color(rgb(0xffffff))
-                    .bg(rgb(GREEN)),
+                    .bg(rgb(tk::green())),
             )
             .on_mouse_down(
                 MouseButton::Left,

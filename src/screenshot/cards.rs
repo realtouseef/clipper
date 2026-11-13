@@ -4,11 +4,12 @@
 //! file aside with a 5 s Undo toast, then to the Trash. The window is hidden from screen
 //! capture, so it never shows up in the next screenshot.
 
+use crate::theme as tk;
 use super::library::{self, Pending};
 use crate::editor::{self, icons};
 use crate::region::Display;
 use crate::ui;
-use crate::{CARD, GREEN, MUTED, TEXT};
+
 use gpui_kit::AnimationExt;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::{Sizable, tooltip::Tooltip};
@@ -311,7 +312,7 @@ impl Cards {
             .h(px(IMAGE_H))
             .w_full()
             .overflow_hidden().rounded_t(px(ui::R_LG - 5.0))
-            .bg(rgb(0x0e0e10))
+            .bg(rgb(tk::raised()))
             .cursor_pointer()
             .children(c.thumb.clone().map(|t| img(t).size_full().rounded_t(px(ui::R_LG - 5.0)).object_fit(ObjectFit::Cover)))
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.edit(p1.clone(), cx)));
@@ -329,8 +330,8 @@ impl Cards {
                     this.edit(p2.clone(), cx)
                 })),
             )
-            .child(div().flex_1().min_w_0().px(px(ui::S2)).text_xs().text_color(rgb(MUTED)).truncate().child(name))
-            .child(icon_btn(format!("copy-{i}"), if copied { icons::check() } else { icons::copy() }, "Copy to clipboard").when(copied, |b| b.text_color(rgb(GREEN))).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+            .child(div().flex_1().min_w_0().px(px(ui::S2)).text_xs().text_color(rgb(tk::muted())).truncate().child(name))
+            .child(icon_btn(format!("copy-{i}"), if copied { icons::check() } else { icons::copy() }, "Copy to clipboard").when(copied, |b| b.text_color(rgb(tk::green_ink()))).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                 cx.stop_propagation();
                 this.copy(p3.clone(), cx)
             })))
@@ -340,7 +341,7 @@ impl Cards {
             })))
             // Destructive: last, and red.
             .child(
-                icon_btn(format!("delete-{i}"), icons::trash(), "Delete (undo for 5 s)").text_color(rgb(crate::RED)).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                icon_btn(format!("delete-{i}"), icons::trash(), "Delete (undo for 5 s)").text_color(rgb(tk::red())).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                     cx.stop_propagation();
                     this.delete(p5.clone(), cx)
                 })),
@@ -377,12 +378,12 @@ impl Render for Cards {
                     .flex()
                     .items_center()
                     .rounded_full()
-                    .bg(rgb(CARD))
+                    .bg(rgb(tk::card()))
                     .border_1()
                     .border_color(ui::hairline_strong())
                     .text_xs()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(rgb(TEXT))
+                    .text_color(rgb(tk::text()))
                     .child(format!("+{hidden} more")),
             );
         }
@@ -391,7 +392,7 @@ impl Render for Cards {
             col = col.child(el);
         }
         let tick = |color: u32| {
-            div().size(px(20.)).flex_none().rounded_full().bg(rgb(color)).flex().items_center().justify_center().child(icons::check().size(px(12.)).text_color(rgb(crate::ON_GREEN)))
+            div().size(px(20.)).flex_none().rounded_full().bg(rgb(color)).flex().items_center().justify_center().child(icons::check().size(px(12.)).text_color(rgb(tk::on_green())))
         };
         if let Some(left) = self.toast_seconds() {
             col = col.child(
@@ -399,19 +400,19 @@ impl Render for Cards {
                     .pl(px(ui::S2))
                     .w(px(CARD_W))
                     .justify_between()
-                    .child(div().flex().items_center().gap(px(ui::S2)).child(tick(GREEN)).child(format!("Deleted · {left}s")))
+                    .child(div().flex().items_center().gap(px(ui::S2)).child(tick(tk::green_ink())).child(format!("Deleted · {left}s")))
                     .child(
                         Button::new("undo").cursor_pointer()
                             .ghost()
                             .small()
                             .rounded_full()
-                            .text_color(rgb(GREEN))
+                            .text_color(rgb(tk::green_ink()))
                             .label("Undo")
                             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.undo(cx))),
                     ),
             );
         } else if let Some((Notice::Copied(_), _)) = &self.notice {
-            col = col.child(ui::toast_pill().pl(px(ui::S2)).pr(px(ui::S4)).child(tick(GREEN)).child("Copied to clipboard"));
+            col = col.child(ui::toast_pill().pl(px(ui::S2)).pr(px(ui::S4)).child(tick(tk::green_ink())).child("Copied to clipboard"));
         } else if let Some((Notice::Error(msg), _)) = &self.notice {
             col = col.child(
                 ui::toast_pill()
@@ -421,7 +422,7 @@ impl Render for Cards {
                     .py(px(ui::S2))
                     .pr(px(ui::S4))
                     .items_start()
-                    .child(div().mt(px(5.)).size(px(8.)).flex_none().rounded_full().bg(rgb(crate::RED)))
+                    .child(div().mt(px(5.)).size(px(8.)).flex_none().rounded_full().bg(rgb(tk::red())))
                     .child(div().text_xs().line_height(px(16.)).child(msg.clone()))
                     .tooltip({
                         let m = msg.clone();

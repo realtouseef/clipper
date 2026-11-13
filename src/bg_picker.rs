@@ -3,12 +3,13 @@
 //! in `backgrounds`. It emits `PickerEvent::Changed` with the new background; the owner
 //! stores it and re-renders.
 
+use crate::theme as tk;
 use crate::backgrounds::generators::{self, Harmony};
 use crate::backgrounds::library::{self, Filter};
 use crate::backgrounds::presets::{self, Category};
 use crate::backgrounds::{self, AnimStyle, Animated, Background, Fit, Gradient, GradientKind, ImageBg, ImageSource, Rgb, Stop};
 use crate::ui;
-use crate::{GREEN, MUTED, RAISED, TEXT};
+
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::color_picker::{ColorPicker, ColorPickerEvent, ColorPickerState};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
@@ -597,8 +598,8 @@ impl BgPicker {
                     .text_xs()
                     .font_weight(FontWeight::MEDIUM)
                     .cursor_pointer()
-                    .when(on, |d| d.bg(rgb(TEXT)).text_color(rgb(crate::BG)))
-                    .when(!on, |d| d.bg(rgb(RAISED)).text_color(rgb(MUTED)).hover(|d| d.text_color(rgb(TEXT))))
+                    .when(on, |d| d.bg(rgb(tk::text())).text_color(rgb(tk::bg())))
+                    .when(!on, |d| d.bg(rgb(tk::raised())).text_color(rgb(tk::muted())).hover(|d| d.text_color(rgb(tk::text()))))
                     .child(label)
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                         this.list = l;
@@ -623,7 +624,7 @@ impl BgPicker {
                     .rounded(px(9.))
                     .overflow_hidden()
                     .border_2()
-                    .border_color(if on { gpui_kit::Hsla::from(rgb(TEXT)) } else { ui::hairline() })
+                    .border_color(if on { gpui_kit::Hsla::from(rgb(tk::text())) } else { ui::hairline() })
                     .cursor_pointer()
                     .children(t.map(|t| img(t).size_full().rounded(px(7.)).object_fit(ObjectFit::Cover)))
                     .tooltip({
@@ -731,7 +732,7 @@ impl BgPicker {
                             .rounded(px(8.))
                             .bg(rgb(hex(*c)))
                             .border_2()
-                            .border_color(if on { gpui_kit::Hsla::from(rgb(TEXT)) } else { ui::hairline() })
+                            .border_color(if on { gpui_kit::Hsla::from(rgb(tk::text())) } else { ui::hairline() })
                             .cursor_pointer()
                             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                                 this.stop = i;
@@ -749,7 +750,7 @@ impl BgPicker {
             .items_center()
             .gap_2()
             .when(!matches!(g.kind, GradientKind::Mesh { .. }) && g.stops.len() > 2, |d| {
-                d.child(Button::new("rm-stop").cursor_pointer().ghost().xsmall().text_color(rgb(crate::RED)).label("Remove stop").on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                d.child(Button::new("rm-stop").cursor_pointer().ghost().xsmall().text_color(rgb(tk::red())).label("Remove stop").on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                     let i = this.stop;
                     this.edit_gradient(cx, |g| {
                         if g.stops.len() > 2 && i < g.stops.len() {
@@ -807,7 +808,7 @@ impl BgPicker {
                     .h(px(36.))
                     .rounded(px(5.))
                     .border_2()
-                    .border_color(rgb(if on { TEXT } else { 0x8a8a90 }))
+                    .border_color(rgb(if on { tk::text() } else { 0x8a8a90 }))
                     .bg(rgb(hex(s.color)))
                     .shadow_md()
                     .cursor_pointer()
@@ -882,7 +883,7 @@ impl BgPicker {
                     .rounded(px(9.))
                     .overflow_hidden()
                     .border_2()
-                    .border_color(if on { gpui_kit::Hsla::from(rgb(TEXT)) } else { ui::hairline() })
+                    .border_color(if on { gpui_kit::Hsla::from(rgb(tk::text())) } else { ui::hairline() })
                     .cursor_pointer()
                     .children(t.map(|t| img(t).size_full().rounded(px(7.)).object_fit(ObjectFit::Cover)))
                     .tooltip({
@@ -1018,13 +1019,13 @@ impl BgPicker {
                 .h(px(42.))
                 .rounded(px(9.))
                 .overflow_hidden()
-                .bg(rgb(RAISED))
+                .bg(rgb(tk::raised()))
                 .border_2()
-                .border_color(if on { gpui_kit::Hsla::from(rgb(TEXT)) } else { ui::hairline() })
+                .border_color(if on { gpui_kit::Hsla::from(rgb(tk::text())) } else { ui::hairline() })
                 .cursor_pointer()
                 .children(t.map(|t| img(t).size_full().rounded(px(7.)).object_fit(ObjectFit::Cover)))
                 .when(fav, |d| d.child(div().absolute().top(px(1.)).right(px(3.)).text_xs().text_color(rgb(0xffd60a)).child("★")))
-                .when_some(badge, |d, b| d.child(div().absolute().inset_0().flex().items_center().justify_center().text_xs().text_color(rgb(MUTED)).child(b)))
+                .when_some(badge, |d, b| d.child(div().absolute().inset_0().flex().items_center().justify_center().text_xs().text_color(rgb(tk::muted())).child(b)))
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                     let keep = match &this.bg {
                         Background::Image(i) => Some(i.clone()),
@@ -1099,10 +1100,10 @@ impl BgPicker {
             .border_dashed()
             .border_color(ui::hairline_strong())
             .text_xs()
-            .text_color(rgb(MUTED))
+            .text_color(rgb(tk::muted()))
             .cursor_pointer()
-            .drag_over::<ExternalPaths>(|s, _, _, _| s.bg(ui::accent_tint()).border_color(rgb(GREEN)))
-            .child(div().text_sm().text_color(rgb(TEXT)).child("Import images"))
+            .drag_over::<ExternalPaths>(|s, _, _, _| s.bg(ui::accent_tint()).border_color(rgb(tk::green_ink())))
+            .child(div().text_sm().text_color(rgb(tk::text())).child("Import images"))
             .child("Drop PNG, JPG or WebP here, or click to choose")
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| this.import(paths.paths().to_vec(), cx)))
             .on_click(cx.listener(|_, _: &ClickEvent, _, cx| {
@@ -1119,7 +1120,7 @@ impl BgPicker {
             .flex()
             .items_center()
             .gap_2()
-            .child(div().flex_1().min_w_0().text_xs().text_color(rgb(MUTED)).truncate().child(match (&watched, library::scanning()) {
+            .child(div().flex_1().min_w_0().text_xs().text_color(rgb(tk::muted())).truncate().child(match (&watched, library::scanning()) {
                 (Some(w), true) => format!("Adding images from {w}…"),
                 (Some(w), false) => format!("Watching {w}"),
                 (None, _) => "No watched folder".into(),
@@ -1163,7 +1164,7 @@ impl BgPicker {
 
         let mut out = vec![drop_zone.into_any_element(), watch.into_any_element()];
         if let Some(e) = &self.error {
-            out.push(div().text_xs().text_color(rgb(0xffb4a8)).child(e.clone()).into_any_element());
+            out.push(div().text_xs().text_color(rgb(tk::error())).child(e.clone()).into_any_element());
         }
         if !recent.is_empty() {
             let mut row = div().flex().gap(px(6.));
@@ -1222,8 +1223,8 @@ impl BgPicker {
                         .flex()
                         .items_center()
                         .gap_2()
-                        .child(div().px(px(8.)).py(px(2.)).rounded_full().bg(hsla(0.11, 0.9, 0.5, 0.18)).text_xs().text_color(rgb(0xffb020)).child("Low resolution"))
-                        .child(div().text_xs().text_color(rgb(MUTED)).child(format!("{} × {} px", size.0, size.1)))
+                        .child(div().px(px(8.)).py(px(2.)).rounded_full().bg(hsla(0.11, 0.9, 0.5, 0.18)).text_xs().text_color(rgb(tk::warn())).child("Low resolution"))
+                        .child(div().text_xs().text_color(rgb(tk::muted())).child(format!("{} × {} px", size.0, size.1)))
                         .into_any_element(),
                 );
             }
@@ -1257,7 +1258,7 @@ impl BgPicker {
                         .h(px(150.))
                         .rounded(px(10.))
                         .overflow_hidden()
-                        .bg(rgb(RAISED))
+                        .bg(rgb(tk::raised()))
                         .cursor_pointer()
                         .children(t.map(|t| img(t).size_full().rounded(px(10.)).object_fit(ObjectFit::Fill)))
                         .child(gpui_kit::canvas(move |b, _, _| {
@@ -1325,7 +1326,7 @@ impl BgPicker {
                     .detach();
                 })));
             }
-            row = row.child(div().flex_1()).child(Button::new("del-img").cursor_pointer().ghost().small().text_color(rgb(crate::RED)).label("Delete").on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+            row = row.child(div().flex_1()).child(Button::new("del-img").cursor_pointer().ghost().small().text_color(rgb(tk::red())).label("Delete").on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                 library::global().lock().unwrap().delete(&id4);
                 thumbs().lock().unwrap().remove(&format!("i:{id4}"));
                 this.selected_image = None;
@@ -1353,7 +1354,7 @@ impl BgPicker {
                     .p(px(3.))
                     .rounded(px(10.))
                     .border_2()
-                    .border_color(if on { gpui_kit::Hsla::from(rgb(TEXT)) } else { gpui_kit::transparent_black() })
+                    .border_color(if on { gpui_kit::Hsla::from(rgb(tk::text())) } else { gpui_kit::transparent_black() })
                     .cursor_pointer()
                     .child(div().size_full().rounded(px(7.)).bg(rgb(hex(c))).border_1().border_color(ui::hairline()))
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.set(Background::Solid { color: c, grain }, cx))),
@@ -1440,7 +1441,7 @@ impl Render for BgPicker {
             .children(body)
             .child(
                 div().pt(px(ui::S2)).child(
-                    Button::new("credits").cursor_pointer().ghost().xsmall().text_color(rgb(MUTED)).label("Gradient credits and licenses").on_click(|_: &ClickEvent, _, cx| crate::credits::open(cx)),
+                    Button::new("credits").cursor_pointer().ghost().xsmall().text_color(rgb(tk::muted())).label("Gradient credits and licenses").on_click(|_: &ClickEvent, _, cx| crate::credits::open(cx)),
                 ),
             )
             .child(tracker)

@@ -1,12 +1,10 @@
 //! The Layout tab: output format (with the platforms each one suits and its exact size),
 //! the webcam (on/off, device, mirror, live preview), and the webcam placement picker.
 
+use crate::theme as tk;
 use crate::knob::Knob;
 use crate::layout::{Corner, Placement, Ratio, Res, Shape, Side};
-use crate::{
-    CARD, Clipper, GREEN, HOVER, LINE, MUTED, ON_GREEN, PRESSED, RAISED, TEXT, Stage, button, grid, hex_color,
-    color_hex, note, section, tip_owned,
-};
+use crate::{Clipper, Stage, button, grid, hex_color, color_hex, note, section, tip_owned};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::prelude::*;
@@ -62,11 +60,11 @@ impl Clipper {
                 .gap_2()
                 .p_3()
                 .rounded(px(16.))
-                .bg(rgb(RAISED))
+                .bg(rgb(tk::raised()))
                 .border_2()
-                .border_color(rgb(if selected { TEXT } else { RAISED }))
+                .border_color(rgb(if selected { tk::text() } else { tk::raised() }))
                 .cursor_pointer()
-                .when(!selected, |d| d.hover(|s| s.bg(rgb(HOVER))))
+                .when(!selected, |d| d.hover(|s| s.bg(rgb(tk::hover()))))
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.set_layout(|l| l.set_ratio(ratio), cx)))
                 .child(
                     div()
@@ -80,14 +78,14 @@ impl Clipper {
                                 .h(px(fh))
                                 .rounded(px(4.))
                                 .border_2()
-                                .border_color(rgb(if selected { GREEN } else { MUTED })),
+                                .border_color(rgb(if selected { tk::green_ink() } else { tk::muted() })),
                         )
                         .child(
                             div()
                                 .flex()
                                 .flex_col()
                                 .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(ratio.title()))
-                                .child(div().text_xs().text_color(rgb(MUTED)).child(ratio.label())),
+                                .child(div().text_xs().text_color(rgb(tk::muted())).child(ratio.label())),
                         ),
                 )
                 .child(
@@ -95,12 +93,12 @@ impl Clipper {
                         .w_full()
                         .whitespace_normal()
                         .text_xs()
-                        .text_color(rgb(MUTED))
+                        .text_color(rgb(tk::muted()))
                         .line_height(px(16.))
                         .child(format!("For {}", ratio.platforms())),
                 )
-                .child(div().mt_auto().pt_1().border_t_1().border_color(rgb(LINE)).text_xs().font_weight(FontWeight::BOLD).text_color(
-                    rgb(if selected { GREEN } else { TEXT }),
+                .child(div().mt_auto().pt_1().border_t_1().border_color(rgb(tk::line())).text_xs().font_weight(FontWeight::BOLD).text_color(
+                    rgb(if selected { tk::green_ink() } else { tk::text() }),
                 ).child(format!("{w} × {h}")))
         });
         let resolution = crate::ui::segmented(
@@ -151,15 +149,15 @@ impl Clipper {
             .w_full()
             .h(px(150.))
             .rounded(px(16.))
-            .bg(rgb(CARD))
+            .bg(rgb(tk::card()))
             .border_1()
-            .border_color(rgb(LINE))
+            .border_color(rgb(tk::line()))
             .overflow_hidden()
             .flex()
             .items_center()
             .justify_center()
             .text_xs()
-            .text_color(rgb(MUTED))
+            .text_color(rgb(tk::muted()))
             .map(|d| match &self.live_frame {
                 Some(frame) => d.child(img(frame.frame.clone()).size_full().object_fit(ObjectFit::Cover).rounded(px(16.))),
                 None if self.live.failed() => d.child("Camera unavailable"),
@@ -204,11 +202,11 @@ impl Clipper {
                 .items_center()
                 .justify_center()
                 .rounded(px(12.))
-                .bg(rgb(RAISED))
+                .bg(rgb(tk::raised()))
                 .border_2()
-                .border_color(rgb(if selected { TEXT } else { RAISED }))
+                .border_color(rgb(if selected { tk::text() } else { tk::raised() }))
                 .cursor_pointer()
-                .when(!selected, |d| d.hover(|s| s.bg(rgb(HOVER))))
+                .when(!selected, |d| d.hover(|s| s.bg(rgb(tk::hover()))))
                 .tooltip(tip_owned(p.label()))
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                     // A placement tile puts the webcam back in that corner.
@@ -248,9 +246,9 @@ impl Clipper {
                         .p(px(2.))
                         .rounded(px(9.))
                         .border_2()
-                        .border_color(rgb(if selected { TEXT } else { CARD }))
+                        .border_color(rgb(if selected { tk::text() } else { tk::card() }))
                         .cursor_pointer()
-                        .child(div().size_full().rounded(px(6.)).border_1().border_color(rgb(PRESSED)).bg(rgb(v)))
+                        .child(div().size_full().rounded(px(6.)).border_1().border_color(rgb(tk::pressed())).bg(rgb(v)))
                         .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                             this.layout.cam_border_color = hex_color(v);
                             cx.notify();
@@ -298,9 +296,9 @@ impl Clipper {
 
 /// A mini canvas showing where the webcam goes.
 fn thumb(p: Placement, w: f32, h: f32, selected: bool, split: f32) -> Div {
-    let accent = rgb(if selected { GREEN } else { MUTED });
-    let screen = rgb(PRESSED);
-    let canvas = div().relative().w(px(w)).h(px(h)).rounded(px(5.)).bg(rgb(CARD)).border_1().border_color(rgb(LINE));
+    let accent = rgb(if selected { tk::green_ink() } else { tk::muted() });
+    let screen = rgb(tk::pressed());
+    let canvas = div().relative().w(px(w)).h(px(h)).rounded(px(5.)).bg(rgb(tk::card())).border_1().border_color(rgb(tk::line()));
     let pad = 3.0;
     match p {
         Placement::None => canvas.child(
@@ -334,7 +332,7 @@ fn thumb(p: Placement, w: f32, h: f32, selected: bool, split: f32) -> Div {
                         .size(px(d))
                         .bg(accent)
                         .border_1()
-                        .border_color(rgb(ON_GREEN))
+                        .border_color(rgb(tk::on_green()))
                         .map(|d2| if shape == Shape::Circle { d2.rounded_full() } else { d2.rounded(px(d * 0.25)) }),
                 )
         }

@@ -34,11 +34,13 @@ mod screenshot;
 mod selector;
 mod shots_panel;
 mod style;
+mod theme;
 mod timeline;
 mod ui;
 mod webcam;
 mod zoom;
 
+use crate::theme as tk;
 use camera::{CameraPath, FollowConfig};
 use zoom::{ZoomMotion, ZoomRegion};
 use canvas_preview::{ArtPixels, CamShow, CanvasArt};
@@ -54,7 +56,7 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::progress::Progress;
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::spinner::Spinner;
-use gpui_kit::component::{ActiveTheme, Selectable, Sizable, Theme, ThemeMode};
+use gpui_kit::component::{ActiveTheme, Selectable, Sizable};
 use gpui_kit::prelude::*;
 use gpui_kit::{
     AnyWindowHandle, App, Bounds, ClickEvent, Div, FocusHandle, FontWeight, Hsla, MouseButton, Pixels,
@@ -71,29 +73,6 @@ use std::sync::atomic::Ordering;
 use std::sync::atomic::AtomicU32;
 use std::time::{Duration, Instant};
 
-// Palette: near-black window, dark cards, lighter round controls, one green accent.
-const BG: u32 = 0x0a0a0b;
-/// Cards (preview, settings panel, timeline).
-const CARD: u32 = 0x18181a;
-/// Controls on a card: buttons, rows, chips.
-const RAISED: u32 = 0x262629;
-const HOVER: u32 = 0x313135;
-const PRESSED: u32 = 0x3d3d42;
-const TEXT: u32 = 0xf4f4f5;
-const MUTED: u32 = 0x9a9aa0;
-const LINE: u32 = 0x2a2a2e;
-/// Primary: actions, active tab, sliders, switches, zooms.
-const GREEN: u32 = 0xa4f47c;
-const GREEN_HOVER: u32 = 0xb9f89b;
-const GREEN_PRESSED: u32 = 0x8ee163;
-/// Text on green.
-const ON_GREEN: u32 = 0x0a0a0b;
-const RED: u32 = 0xff453a;
-/// Dark red disc behind the stop square.
-const RED_DEEP: u32 = 0x3a1412;
-const RED_DEEP_HOVER: u32 = 0x4d1a17;
-/// Behind the 9:16 preview inside its card.
-const STAGE: u32 = CARD;
 const R_CARD: f32 = 24.0;
 const GAP: f32 = 10.0;
 const HEADER_H: f32 = 52.0;
@@ -411,6 +390,8 @@ impl Clipper {
                 cx.notify();
             }
         }));
+        // macOS light/dark switched: follow it when the appearance is Auto.
+        subs.push(cx.observe_window_appearance(window, |_, _, cx| theme::system_changed(cx)));
         let cam_select = cx.new(|_| dropdown::Dropdown::new("webcam-device", "Camera"));
         subs.push(cx.subscribe(&cam_select, |this, _, ev: &dropdown::DropdownEvent, cx| {
             let dropdown::DropdownEvent::Select(i) = ev;
@@ -1112,7 +1093,7 @@ impl Clipper {
             .min_w_0()
             .h_full()
             .rounded(px(R_CARD))
-            .bg(rgb(STAGE))
+            .bg(rgb(tk::card()))
             .flex()
             .flex_col()
             .items_center()
@@ -1395,7 +1376,7 @@ impl Clipper {
             .gap(px(4.))
             .py(px(10.))
             .rounded(px(R_CARD))
-            .bg(rgb(CARD));
+            .bg(rgb(tk::card()));
         for p in Panel::ALL {
             let on = p == self.panel;
             rail = rail.child(
@@ -1409,8 +1390,8 @@ impl Clipper {
                     .gap(px(4.))
                     .rounded(px(14.))
                     .cursor_pointer()
-                    .when(on, |d| d.bg(ui::accent_tint()).text_color(rgb(GREEN)))
-                    .when(!on, |d| d.text_color(rgb(MUTED)).hover(|d| d.bg(rgb(RAISED)).text_color(rgb(TEXT))))
+                    .when(on, |d| d.bg(ui::accent_tint()).text_color(rgb(tk::green_ink())))
+                    .when(!on, |d| d.text_color(rgb(tk::muted())).hover(|d| d.bg(rgb(tk::raised())).text_color(rgb(tk::text()))))
                     .child(p.icon().size(px(20.)))
                     .child(div().text_size(px(11.)).font_weight(FontWeight::MEDIUM).child(p.label()))
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
@@ -1441,6 +1422,7 @@ impl Clipper {
                 .flex_col()
                 .gap_5()
                 .child(section("Display", self.source_section(cx)))
+                .child(section("Appearance", self.appearance_picker(cx)))
                 .child(section("Audio", div().child(self.mic.clone())))
                 .child(section("Export", self.output_section(cx)))
                 .child(section(
@@ -1461,7 +1443,7 @@ impl Clipper {
             .flex_col()
             .rounded(px(R_CARD))
             .overflow_hidden()
-            .bg(rgb(CARD))
+            .bg(rgb(tk::card()))
             .child(div().px_4().pt_4().pb_1().text_base().font_weight(FontWeight::SEMIBOLD).child(self.panel.label()))
             .child(
                 div()
@@ -1494,7 +1476,7 @@ impl Clipper {
                         .justify_between()
                         .text_sm()
                         .child(name.clone())
-                        .child(div().text_xs().text_color(rgb(MUTED)).child(dims.clone())),
+                        .child(div().text_xs().text_color(rgb(tk::muted())).child(dims.clone())),
                 )
         });
         div()
@@ -1569,9 +1551,9 @@ impl Clipper {
                 .p(px(2.))
                 .rounded(px(9.))
                 .border_2()
-                .border_color(rgb(if selected { GREEN } else { CARD }))
+                .border_color(rgb(if selected { tk::green_ink() } else { tk::card() }))
                 .cursor_pointer()
-                .child(div().size_full().rounded_full().border_1().border_color(rgb(LINE)).bg(rgb(v)))
+                .child(div().size_full().rounded_full().border_1().border_color(rgb(tk::line())).bg(rgb(v)))
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                     this.style.click.color = hex_color(v);
                     cx.notify();
@@ -1635,7 +1617,7 @@ impl Clipper {
                     .gap_2()
                     .text_xs()
                     .child(div().truncate().child(display_path(&self.out_dir)))
-                    .child(div().text_color(rgb(MUTED)).child("Change")),
+                    .child(div().text_color(rgb(tk::muted())).child("Change")),
             );
         div()
             .flex()
@@ -1679,9 +1661,59 @@ impl Clipper {
                     .gap_2()
                     .child(img(mascot::image(56)).h(px(26.)).w(px(26. * mascot::aspect())))
                     .child(div().text_base().font_weight(FontWeight::BOLD).child("Clipper"))
-                    .child(div().text_xs().text_color(rgb(MUTED)).child(subtitle)),
+                    .child(div().text_xs().text_color(rgb(tk::muted())).child(subtitle)),
             )
-            .child(self.header_actions(cx))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(self.header_actions(cx))
+                    .child(div().w(px(1.)).h(px(20.)).mx_1().bg(ui::hairline_strong()))
+                    .child(self.theme_toggle(cx)),
+            )
+    }
+
+    /// Auto / Light / Dark, in the Output tab.
+    fn appearance_picker(&self, cx: &mut Context<Self>) -> Div {
+        let now = theme::preference();
+        let items = theme::Appearance::ALL
+            .into_iter()
+            .map(|a| {
+                let on: ui::OnClick = Box::new(cx.listener(move |_, _: &ClickEvent, _, cx| {
+                    theme::set_preference(a, cx);
+                    cx.notify();
+                }));
+                (gpui_kit::SharedString::from(a.label()), a == now, on)
+            })
+            .collect();
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(ui::segmented("appearance", items))
+            .child(note("Auto follows your Mac's light or dark setting."))
+    }
+
+    /// Header shortcut: cycles Auto → Light → Dark; the icon shows the current choice.
+    fn theme_toggle(&self, cx: &mut Context<Self>) -> Button {
+        let now = theme::preference();
+        let (icon, next) = match now {
+            theme::Appearance::System => (editor::icons::sun_moon(), theme::Appearance::Light),
+            theme::Appearance::Light => (editor::icons::sun(), theme::Appearance::Dark),
+            theme::Appearance::Dark => (editor::icons::moon(), theme::Appearance::System),
+        };
+        Button::new("theme-toggle")
+            .cursor_pointer()
+            .ghost()
+            .rounded_full()
+            .size(px(34.))
+            .icon(icon)
+            .tooltip(format!("Appearance: {}. Click for {}", now.label(), next.label()))
+            .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
+                theme::set_preference(next, cx);
+                cx.notify();
+            }))
     }
 
     /// What Record captures: the whole display or a region, right next to Record. In
@@ -1699,8 +1731,8 @@ impl Clipper {
                 .cursor_pointer()
                 .text_sm()
                 .font_weight(FontWeight::MEDIUM)
-                .when(on, |d| d.bg(rgb(TEXT)).text_color(rgb(BG)))
-                .when(!on, |d| d.text_color(rgb(MUTED)).hover(|d| d.bg(rgb(HOVER)).text_color(rgb(TEXT))))
+                .when(on, |d| d.bg(rgb(tk::text())).text_color(rgb(tk::bg())))
+                .when(!on, |d| d.text_color(rgb(tk::muted())).hover(|d| d.bg(rgb(tk::hover())).text_color(rgb(tk::text()))))
                 .child(icon.size(px(15.)))
                 .child(label)
         };
@@ -1713,15 +1745,15 @@ impl Clipper {
                 .items_center()
                 .gap_1p5()
                 .rounded_full()
-                .bg(rgb(RAISED))
+                .bg(rgb(tk::raised()))
                 .border_1()
                 .border_color(ui::hairline())
                 .cursor_pointer()
-                .hover(|d| d.bg(rgb(HOVER)))
+                .hover(|d| d.bg(rgb(tk::hover())))
                 .text_xs()
-                .text_color(rgb(TEXT))
+                .text_color(rgb(tk::text()))
                 .child(format!("{} × {}", r.w, r.h))
-                .child(editor::icons::edit().size(px(13.)).text_color(rgb(MUTED)))
+                .child(editor::icons::edit().size(px(13.)).text_color(rgb(tk::muted())))
                 .tooltip(tip("Select a new region"))
                 .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.open_selector(cx)))
         });
@@ -1734,7 +1766,7 @@ impl Clipper {
                     .flex()
                     .p(px(3.))
                     .rounded_full()
-                    .bg(rgb(RAISED))
+                    .bg(rgb(tk::raised()))
                     .border_1()
                     .border_color(ui::hairline())
                     .child(seg("src-display", editor::icons::monitor(), "Full screen", !self.use_region).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
@@ -1768,7 +1800,7 @@ impl Clipper {
             ).child(
                 accent_button("record", cx)
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.start_recording(cx)))
-                    .child(div().size(px(10.)).rounded_full().bg(rgb(RED)).border_2().border_color(rgb(ON_GREEN)))
+                    .child(div().size(px(10.)).rounded_full().bg(rgb(tk::red())).border_2().border_color(rgb(tk::on_green())))
                     .child("Record"),
             ),
             Stage::Starting | Stage::Recording => {
@@ -1783,8 +1815,8 @@ impl Clipper {
                         .items_center()
                         .gap_2()
                         .text_sm()
-                        .when(starting, |d| d.child(Spinner::new().color(c(MUTED))))
-                        .when(!starting, |d| d.child(dot(if blink { RED } else { BG }, 8.)))
+                        .when(starting, |d| d.child(Spinner::new().color(c(tk::muted()))))
+                        .when(!starting, |d| d.child(dot(if blink { tk::red() } else { tk::bg() }, 8.)))
                         .child(if starting {
                             "Starting…"
                         } else if paused {
@@ -1801,14 +1833,14 @@ impl Clipper {
                 .child(
                     header_button("stop", cx)
                         .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.stop_recording(cx)))
-                        .child(div().size(px(10.)).rounded(px(3.)).bg(rgb(RED)))
+                        .child(div().size(px(10.)).rounded(px(3.)).bg(rgb(tk::red())))
                         .child("Stop"),
                 )
             }
             Stage::Processing => row
                 .text_sm()
-                .text_color(rgb(MUTED))
-                .child(Spinner::new().color(c(MUTED)))
+                .text_color(rgb(tk::muted()))
+                .child(Spinner::new().color(c(tk::muted())))
                 .child("Preparing preview…"),
             Stage::Review => {
                 // After an export: where it went, and the editor stays open for changes and
@@ -1826,8 +1858,8 @@ impl Clipper {
                                 .gap_1p5()
                                 .max_w(px(260.))
                                 .text_xs()
-                                .text_color(rgb(MUTED))
-                                .child(gpui_kit::component::Icon::new(gpui_kit::assets::IconName::CircleCheck).size_3p5().text_color(rgb(GREEN)))
+                                .text_color(rgb(tk::muted()))
+                                .child(gpui_kit::component::Icon::new(gpui_kit::assets::IconName::CircleCheck).size_3p5().text_color(rgb(tk::green_ink())))
                                 .child(div().truncate().child(format!("Saved {name}"))),
                         )
                         .child(header_button("reveal", cx).child("Show in Finder").on_click(move |_, _, _| {
@@ -1837,7 +1869,7 @@ impl Clipper {
                 row.children(saved)
                     .child(
                         header_button("discard", cx)
-                            .text_color(rgb(MUTED))
+                            .text_color(rgb(tk::muted()))
                             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                                 // Keep the recording files once something was exported from it.
                                 let discard = this.saved.is_none();
@@ -1854,7 +1886,7 @@ impl Clipper {
             Stage::Exporting => {
                 let p = self.export.run.as_ref().map_or(0.0, |r| r.job.progress.render.load(Ordering::Relaxed) as f32 / 10.0);
                 row.child(div().text_sm().child("Exporting…"))
-                    .child(div().w(px(140.)).child(Progress::new("export-progress").value(p).color(c(GREEN))))
+                    .child(div().w(px(140.)).child(Progress::new("export-progress").value(p).color(c(tk::green()))))
                     .child(
                         header_button("export-open", cx)
                             .child("Details")
@@ -1914,7 +1946,7 @@ impl Render for Clipper {
                                 .max_w(px(420.))
                                 .p_4()
                                 .rounded(px(R_MID))
-                                .bg(rgb(RAISED))
+                                .bg(rgb(tk::raised()))
                                 .flex()
                                 .flex_col()
                                 .gap_1()
@@ -1934,7 +1966,7 @@ fn section(title: &'static str, body: impl IntoElement) -> Div {
         .flex()
         .flex_col()
         .gap_2()
-        .child(div().text_xs().font_weight(FontWeight::SEMIBOLD).text_color(rgb(MUTED)).child(title))
+        .child(div().text_xs().font_weight(FontWeight::SEMIBOLD).text_color(rgb(tk::muted())).child(title))
         .child(body)
 }
 
@@ -1959,7 +1991,7 @@ fn grid(cols: u16) -> Div {
 }
 
 fn note(text: &str) -> Div {
-    div().text_xs().text_color(rgb(MUTED)).child(text.to_string())
+    div().text_xs().text_color(rgb(tk::muted())).child(text.to_string())
 }
 
 fn dot(color: u32, d: f32) -> Div {
@@ -1996,67 +2028,6 @@ fn accent_button(id: &'static str, _: &App) -> Button {
 
 fn button(id: &'static str, label: &'static str, _: &App) -> Button {
     Button::new(id).cursor_pointer().secondary().rounded(px(R_MID)).label(label)
-}
-
-/// Dark theme tuned to the app: near-black surfaces, green accent, round corners.
-/// Edited through `Theme::update` so the kit's component tokens pick the colors up too.
-fn apply_theme(cx: &mut App) {
-    Theme::change(ThemeMode::Dark, None, cx);
-    Theme::update(cx, |theme| {
-        theme.radius = px(R_MID);
-        theme.radius_lg = px(R_BIG);
-        theme.shadow = false;
-        let t = &mut theme.colors;
-        t.background = c(BG);
-        t.foreground = c(TEXT);
-        t.border = c(LINE);
-        t.input = c(LINE);
-        t.ring = c(GREEN);
-        t.muted = c(RAISED);
-        t.muted_foreground = c(MUTED);
-        t.primary = c(GREEN);
-        t.primary_hover = c(GREEN_HOVER);
-        t.primary_active = c(GREEN_PRESSED);
-        t.primary_foreground = c(ON_GREEN);
-        t.secondary = c(RAISED);
-        t.secondary_hover = c(HOVER);
-        t.secondary_active = c(PRESSED);
-        t.secondary_foreground = c(TEXT);
-        t.accent = c(HOVER);
-        t.accent_foreground = c(TEXT);
-        t.popover = c(RAISED);
-        t.popover_foreground = c(TEXT);
-        t.list = c(RAISED);
-        t.list_hover = c(HOVER);
-        t.list_active = c(PRESSED);
-        t.list_active_border = c(PRESSED);
-        // Buttons: primary = green pill, secondary = dark control, danger = stop.
-        t.button_primary = c(GREEN);
-        t.button_primary_hover = c(GREEN_HOVER);
-        t.button_primary_active = c(GREEN_PRESSED);
-        t.button_primary_foreground = c(ON_GREEN);
-        t.button_secondary = c(RAISED);
-        t.button_secondary_hover = c(HOVER);
-        t.button_secondary_active = c(PRESSED);
-        t.button_secondary_foreground = c(TEXT);
-        t.button_danger = c(RED_DEEP);
-        t.button_danger_hover = c(RED_DEEP_HOVER);
-        t.button_danger_active = c(RED_DEEP_HOVER);
-        t.button_danger_foreground = c(RED);
-        t.slider_bar = c(GREEN);
-        t.slider_thumb = c(TEXT);
-        t.switch = c(PRESSED);
-        t.switch_thumb = c(TEXT);
-        t.progress_bar = c(GREEN);
-        t.tab_bar = c(CARD);
-        t.tab_bar_segmented = c(RAISED);
-        t.tab = c(RAISED);
-        t.tab_active = c(BG);
-        t.tab_foreground = c(MUTED);
-        t.tab_active_foreground = c(TEXT);
-        t.scrollbar_thumb = c(PRESSED);
-        t.scrollbar_thumb_hover = c(MUTED);
-    });
 }
 
 /// Dev only: `CLIPPER_DEMO=1 cargo run` drives a scripted session (record, pause, mute +
@@ -2131,7 +2102,7 @@ fn main() {
     app.on_reopen(|_| menubar::request(menubar::Action::Open));
     app.run(|cx: &mut App| {
         gpui_kit::init(cx);
-        apply_theme(cx);
+        theme::init(cx);
 
         let bounds = Bounds::centered(None, size(px(1360.), px(860.)), cx);
         let main = gpui_kit::open_window(

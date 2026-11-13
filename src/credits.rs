@@ -1,7 +1,8 @@
 //! Credits: the open-source data, fonts and icons bundled in the app, with their licenses.
 
+use crate::theme as tk;
 use crate::ui;
-use crate::{BG, MUTED, TEXT};
+
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::prelude::*;
 use gpui_kit::{App, Bounds, FontWeight, TitlebarOptions, Window, WindowBounds, WindowOptions, div, point, px, rgb, size};
@@ -32,7 +33,7 @@ impl Render for Credits {
                 .items_center()
                 .gap_3()
                 .child(gpui_kit::img(crate::mascot::image(120)).h(px(52.)).w(px(52. * crate::mascot::aspect())))
-                .child(div().flex().flex_col().child(div().text_xl().font_weight(FontWeight::BOLD).child("Credits")).child(div().text_xs().text_color(rgb(MUTED)).child("Clipper is made with these open-source works."))),
+                .child(div().flex().flex_col().child(div().text_xl().font_weight(FontWeight::BOLD).child("Credits")).child(div().text_xs().text_color(rgb(tk::muted())).child("Clipper is made with these open-source works."))),
         );
         for e in &ENTRIES {
             col = col.child(
@@ -41,22 +42,22 @@ impl Render for Credits {
                     .flex_col()
                     .gap(px(ui::S2))
                     .child(div().text_base().font_weight(FontWeight::SEMIBOLD).child(e.name))
-                    .child(div().text_xs().text_color(rgb(MUTED)).child(e.what))
+                    .child(div().text_xs().text_color(rgb(tk::muted())).child(e.what))
                     .child(
                         div()
                             .p(px(ui::S3))
                             .rounded(px(10.))
-                            .bg(rgb(crate::CARD))
+                            .bg(rgb(tk::card()))
                             .border_1()
                             .border_color(ui::hairline())
                             .text_xs()
                             .line_height(px(17.))
-                            .text_color(rgb(0xc7c7cc))
+                            .text_color(rgb(tk::text_soft()))
                             .child(e.license.trim().to_string()),
                     ),
             );
         }
-        div().id("credits").size_full().bg(rgb(BG)).text_color(rgb(TEXT)).overflow_y_scrollbar().child(col)
+        div().id("credits").size_full().bg(rgb(tk::bg())).text_color(rgb(tk::text())).overflow_y_scrollbar().child(col)
     }
 }
 

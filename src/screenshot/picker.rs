@@ -2,9 +2,10 @@
 //! pointer. Click captures it, Esc cancels. Like the region selector, it is hidden from
 //! screen capture and closes before the shot is taken.
 
+use crate::theme as tk;
 use super::capture::{WindowInfo, window_at};
 use crate::region::Display;
-use crate::{GREEN, ON_GREEN};
+
 use gpui_kit::prelude::*;
 use gpui_kit::{
     AnyWindowHandle, App, DisplayId, FocusHandle, FontWeight, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent,
@@ -121,7 +122,7 @@ impl Render for Picker {
                 .h(px(w.h as f32))
                 .rounded(px(10.))
                 .border_2()
-                .border_color(rgb(GREEN))
+                .border_color(rgb(tk::DARK.green))
                 .bg(hsla(0.27, 0.85, 0.72, 0.18))
                 .flex()
                 .items_center()
@@ -135,8 +136,8 @@ impl Render for Picker {
                         .px_4()
                         .py_2()
                         .rounded(px(12.))
-                        .bg(rgb(GREEN))
-                        .text_color(rgb(ON_GREEN))
+                        .bg(rgb(tk::DARK.green))
+                        .text_color(rgb(tk::DARK.on_green))
                         .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).max_w(px(360.)).truncate().child(label))
                         .child(div().text_xs().child(px_size)),
                 ),

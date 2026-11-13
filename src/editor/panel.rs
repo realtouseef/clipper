@@ -1,11 +1,12 @@
 //! The editor's properties panel: settings for the selected object, or for the current tool
 //! when nothing is selected.
 
+use crate::theme as tk;
 use super::doc::*;
 use super::stickers;
 use super::view::{EditorView, Prop, RedactMode, RedactShape, Slot, Tool};
 use crate::ui::{self, S2, S4, S6, hairline};
-use crate::{CARD, MUTED, RAISED, TEXT};
+
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::color_picker::ColorPicker;
 use gpui_kit::component::input::Input;
@@ -28,7 +29,7 @@ fn section(title: &str) -> Div {
         .border_color(hairline())
         .text_sm()
         .font_weight(FontWeight::SEMIBOLD)
-        .text_color(rgb(TEXT))
+        .text_color(rgb(tk::text()))
         .child(title.to_string())
 }
 
@@ -77,14 +78,14 @@ impl EditorView {
                     .size(px(26.))
                     .rounded(px(7.))
                     .border_2()
-                    .border_color(if on { gpui_kit::Hsla::from(rgb(TEXT)) } else { ui::hairline_strong() })
-                    .bg(rgb(CARD))
+                    .border_color(if on { gpui_kit::Hsla::from(rgb(tk::text())) } else { ui::hairline_strong() })
+                    .bg(rgb(tk::card()))
                     .tooltip(|w, cx| gpui_kit::component::tooltip::Tooltip::new("None").build(w, cx))
                     .flex()
                     .items_center()
                     .justify_center()
                     .text_xs()
-                    .text_color(rgb(MUTED))
+                    .text_color(rgb(tk::muted()))
                     .cursor_pointer()
                     .child("∅")
                     .on_click(cx.listener(move |v, _: &ClickEvent, _, cx| v.set_color(slot, None, cx))),
@@ -100,7 +101,7 @@ impl EditorView {
                     .p(px(2.))
                     .rounded(px(8.))
                     .border_2()
-                    .border_color(if on { gpui_kit::Hsla::from(rgb(TEXT)) } else { gpui_kit::transparent_black() })
+                    .border_color(if on { gpui_kit::Hsla::from(rgb(tk::text())) } else { gpui_kit::transparent_black() })
                     .cursor_pointer()
                     .child(div().size_full().rounded(px(5.)).bg(rgb(hex(c))).border_1().border_color(ui::hairline()))
                     .on_click(cx.listener(move |v, _: &ClickEvent, _, cx| {
@@ -165,7 +166,7 @@ impl EditorView {
                         .flex()
                         .flex_col()
                         .gap(px(2.))
-                        .child(div().text_xs().text_color(rgb(MUTED)).child(if locked { "Selected · locked" } else { kind }))
+                        .child(div().text_xs().text_color(rgb(tk::muted())).child(if locked { "Selected · locked" } else { kind }))
                         .child(div().text_base().font_weight(FontWeight::SEMIBOLD).child(ctx.label())),
                 )
                 .child(ui::kbd(ctx.key().to_uppercase())),
@@ -262,7 +263,7 @@ impl EditorView {
                         .gap(px(2.))
                         .p(px(3.))
                         .rounded(px(12.))
-                        .bg(rgb(RAISED))
+                        .bg(rgb(tk::raised()))
                         .border_1()
                         .border_color(hairline())
                         .child(act("dup", super::icons::duplicate(), "Duplicate  ⌘D").on_click(cx.listener(|v, _: &ClickEvent, w, cx| v.object_action("duplicate", w, cx))))
@@ -296,7 +297,7 @@ impl EditorView {
             .h_full()
             .border_l_1()
             .border_color(hairline())
-            .bg(rgb(CARD))
+            .bg(rgb(tk::card()))
             .overflow_y_scrollbar()
             .child(col)
     }
@@ -693,9 +694,9 @@ impl EditorView {
                         .px_2()
                         .py_1()
                         .rounded(px(8.))
-                        .bg(rgb(0x4a3410))
+                        .bg(rgb(tk::warn_bg()))
                         .text_xs()
-                        .text_color(rgb(0xffb020))
+                        .text_color(rgb(tk::warn()))
                         .child(format!("Low resolution: shown at {:.1}× its pixels", img.scale()))
                         .into_any_element(),
                 );
@@ -818,8 +819,8 @@ impl EditorView {
                     .rounded(px(8.))
                     .text_xl()
                     .cursor_pointer()
-                    .when(on, |d| d.bg(rgb(RAISED)))
-                    .hover(|d| d.bg(rgb(RAISED)))
+                    .when(on, |d| d.bg(rgb(tk::raised())))
+                    .hover(|d| d.bg(rgb(tk::raised())))
                     .child(s.clone())
                     .on_click(cx.listener(move |v, _: &ClickEvent, _, cx| {
                         v.defaults.emoji = s.clone();
@@ -879,7 +880,7 @@ impl EditorView {
             let cat = category(&src);
             if cat != last_cat && stickers::CATEGORIES.contains(&cat) {
                 last_cat = cat;
-                grid = grid.child(div().w_full().pt_1().text_xs().text_color(rgb(MUTED)).child(cat));
+                grid = grid.child(div().w_full().pt_1().text_xs().text_color(rgb(tk::muted())).child(cat));
             }
             let on = src == current;
             let thumb = self.thumbs.get(&src).cloned();
@@ -890,8 +891,8 @@ impl EditorView {
                     .p(px(6.))
                     .rounded(px(10.))
                     .border_2()
-                    .border_color(if on { gpui_kit::Hsla::from(rgb(TEXT)) } else { ui::hairline() })
-                    .bg(rgb(0x202023))
+                    .border_color(if on { gpui_kit::Hsla::from(rgb(tk::text())) } else { ui::hairline() })
+                    .bg(rgb(tk::raised()))
                     .cursor_pointer()
                     .children(thumb.map(|t| img(t).size_full().rounded(px(8.)).object_fit(ObjectFit::Contain)))
                     .on_click(cx.listener(move |v, _: &ClickEvent, _, cx| {
@@ -1146,7 +1147,7 @@ impl EditorView {
             v.push(Self::hint("The screenshot is centered and fitted inside. Press Enter to apply.").into_any_element());
         }
         let (w, h) = self.doc.layout().canvas;
-        v.push(div().text_xs().text_color(rgb(MUTED)).child(format!("Output {w} × {h} px")).into_any_element());
+        v.push(div().text_xs().text_color(rgb(tk::muted())).child(format!("Output {w} × {h} px")).into_any_element());
         v
     }
 }

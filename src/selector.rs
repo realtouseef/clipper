@@ -7,8 +7,9 @@
 //! while recording. Neither window is ever captured: the screen recorder leaves out every
 //! Clipper window (and the border sits outside the region anyway).
 
+use crate::theme as tk;
 use crate::region::{Display, Region};
-use crate::{Clipper, GREEN, ON_GREEN, TEXT};
+use crate::{Clipper};
 use gpui_kit::prelude::*;
 use gpui_kit::{
     AnyWindowHandle, App, Bounds, DisplayId, Entity, FocusHandle, FontWeight, KeyDownEvent, MouseButton, MouseDownEvent,
@@ -243,7 +244,7 @@ impl Render for Selector {
                         .rounded_full()
                         .bg(hsla(0., 0., 0., 0.75))
                         .text_sm()
-                        .text_color(rgb(TEXT))
+                        .text_color(rgb(tk::DARK.text))
                         .child("Drag to select the area to record  ·  Esc to cancel"),
                 ),
             );
@@ -261,7 +262,7 @@ impl Render for Selector {
                 .rounded(px(3.))
                 .bg(rgb(0xffffff))
                 .border_1()
-                .border_color(rgb(GREEN))
+                .border_color(rgb(tk::DARK.green))
         });
         // Readout and buttons sit below the selection, or above it near the bottom edge.
         let below = y + h + 56.0 < vh;
@@ -283,7 +284,7 @@ impl Render for Selector {
                     .bg(hsla(0., 0., 0., 0.8))
                     .text_xs()
                     .font_weight(FontWeight::MEDIUM)
-                    .text_color(rgb(TEXT))
+                    .text_color(rgb(tk::DARK.text))
                     .child(label),
             )
             .child(
@@ -294,7 +295,7 @@ impl Render for Selector {
                     .rounded_full()
                     .bg(hsla(0., 0., 0., 0.8))
                     .text_xs()
-                    .text_color(rgb(TEXT))
+                    .text_color(rgb(tk::DARK.text))
                     .cursor_pointer()
                     .child("Cancel")
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -306,10 +307,10 @@ impl Render for Selector {
                     .px_3()
                     .py_1p5()
                     .rounded_full()
-                    .bg(rgb(GREEN))
+                    .bg(rgb(tk::DARK.green))
                     .text_xs()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(rgb(ON_GREEN))
+                    .text_color(rgb(tk::DARK.on_green))
                     .cursor_pointer()
                     .child("Confirm  ↵")
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -328,7 +329,7 @@ impl Render for Selector {
                     .w(px(w + 2.0))
                     .h(px(h + 2.0))
                     .border_2()
-                    .border_color(rgb(GREEN))
+                    .border_color(rgb(tk::DARK.green))
                     .cursor_move(),
             )
             .children(handles)

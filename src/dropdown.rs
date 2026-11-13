@@ -5,13 +5,14 @@
 //! `Dropdown` is an entity: create it with `cx.new`, render it with `.child(entity.clone())`,
 //! and subscribe to [`DropdownEvent`] for picks.
 
-use crate::{CARD, GREEN, HOVER, MUTED, PRESSED, RAISED, TEXT};
+
+use crate::theme as tk;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::Icon;
 use gpui_kit::prelude::*;
 use gpui_kit::{
     BoxShadow, Bounds, EventEmitter, FontWeight, MouseButton, Pixels, SharedString, Window, anchored, canvas,
-    deferred, div, hsla, point, px, rgb,
+    deferred, div, point, px, rgb,
 };
 use std::cell::Cell;
 use std::rc::Rc;
@@ -109,12 +110,12 @@ impl Dropdown {
                 .gap_2()
                 .rounded(px(10.))
                 .text_sm()
-                .text_color(rgb(if selected { TEXT } else { 0xd4d4d8 }))
+                .text_color(rgb(if selected { tk::text() } else { tk::text_soft() }))
                 .when(selected, |d| d.font_weight(FontWeight::MEDIUM))
                 .cursor_pointer()
-                .hover(|s| s.bg(rgb(HOVER)).text_color(rgb(TEXT)))
+                .hover(|s| s.bg(rgb(tk::hover())).text_color(rgb(tk::text())))
                 .child(div().min_w_0().truncate().child(label.clone()))
-                .when(selected, |d| d.child(Icon::new(IconName::Check).size_4().text_color(rgb(GREEN))))
+                .when(selected, |d| d.child(Icon::new(IconName::Check).size_4().text_color(rgb(tk::green_ink()))))
                 .on_click(cx.listener(move |this, _, _, cx| this.pick(i, cx)))
         });
         div()
@@ -129,11 +130,11 @@ impl Dropdown {
             .max_h(px(300.))
             .overflow_y_scroll()
             .rounded(px(14.))
-            .bg(rgb(CARD))
+            .bg(rgb(tk::card()))
             .border_1()
-            .border_color(rgb(PRESSED))
+            .border_color(rgb(tk::pressed()))
             .shadow(vec![BoxShadow {
-                color: hsla(0., 0., 0., 0.55),
+                color: tk::shadow(0.55),
                 offset: point(px(0.), px(12.)),
                 blur_radius: px(32.),
                 spread_radius: px(0.),
@@ -161,24 +162,24 @@ impl Render for Dropdown {
             .justify_between()
             .gap_2()
             .rounded(px(12.))
-            .bg(rgb(RAISED))
+            .bg(rgb(tk::raised()))
             .border_1()
-            .border_color(rgb(if open { GREEN } else { RAISED }))
+            .border_color(rgb(if open { tk::green_ink() } else { tk::raised() }))
             .text_sm()
             .when(disabled, |d| d.opacity(0.5))
-            .when(!disabled, |d| d.cursor_pointer().hover(|s| s.bg(rgb(HOVER))))
+            .when(!disabled, |d| d.cursor_pointer().hover(|s| s.bg(rgb(tk::hover()))))
             .child(canvas(move |b, _, _| store.set(b), |_, _, _, _| {}).absolute().size_full())
             .child(
                 div()
                     .min_w_0()
                     .truncate()
-                    .text_color(rgb(if has_value { TEXT } else { MUTED }))
+                    .text_color(rgb(if has_value { tk::text() } else { tk::muted() }))
                     .child(label.unwrap_or_else(|| self.placeholder.clone())),
             )
             .child(
                 Icon::new(if open { IconName::ChevronUp } else { IconName::ChevronDown })
                     .size_4()
-                    .text_color(rgb(if open { GREEN } else { MUTED })),
+                    .text_color(rgb(if open { tk::green_ink() } else { tk::muted() })),
             )
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_click(cx.listener(|this, _, _, cx| this.toggle(cx)));

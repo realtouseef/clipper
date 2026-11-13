@@ -6,8 +6,8 @@
 //! It runs its own small camera feed (macOS lets several clients share a camera) and keeps
 //! its own frames, so it works while the main window is minimized.
 
+use crate::theme as tk;
 use crate::Clipper;
-use crate::ui;
 use gpui_kit::prelude::*;
 use gpui_kit::{
     AnyWindowHandle, App, Entity, FontWeight, MouseButton, MouseDownEvent, MouseMoveEvent, ObjectFit, RenderImage, Window,
@@ -156,7 +156,7 @@ impl Render for CamBubble {
         }
 
         let label = |text: &'static str| {
-            div().size_full().flex().flex_col().items_center().justify_center().gap_2().text_xs().font_weight(FontWeight::MEDIUM).text_color(rgb(ui::MUTED))
+            div().size_full().flex().flex_col().items_center().justify_center().gap_2().text_xs().font_weight(FontWeight::MEDIUM).text_color(rgb(tk::muted()))
                 .child(crate::editor::icons::camera().size(px(22.)))
                 .child(text)
         };
@@ -174,7 +174,7 @@ impl Render for CamBubble {
                 .size(px(D))
                 .rounded_full()
                 .overflow_hidden()
-                .bg(rgb(ui::SURFACE))
+                .bg(rgb(tk::card()))
                 .border_2()
                 .border_color(hsla(0., 0., 1.0, if dragging { 0.5 } else { 0.22 }))
                 .shadow(vec![gpui_kit::BoxShadow {

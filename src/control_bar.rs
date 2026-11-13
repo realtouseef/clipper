@@ -5,7 +5,8 @@
 //! Clipper window, and the bar is also marked `NSWindowSharingNone` so screenshots and other
 //! capture tools skip it.
 
-use crate::{Clipper, MUTED, RED, TEXT};
+use crate::theme as tk;
+use crate::{Clipper};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::{Disableable, Icon};
@@ -120,12 +121,12 @@ impl Render for ControlBar {
             .size(px(8.))
             .rounded_full()
             .size(px(10.))
-            .bg(rgb(if live && s.blink_on { RED } else if live { 0x7a2420 } else { MUTED }));
+            .bg(rgb(if live && s.blink_on { tk::red() } else if live { if tk::is_light() { 0xf2b8b2 } else { 0x7a2420 } } else { tk::muted() }));
         let time = div()
             .w(px(56.))
             .text_base()
             .font_weight(FontWeight::BOLD)
-            .text_color(rgb(if live { TEXT } else { MUTED }))
+            .text_color(rgb(if live { tk::text() } else { tk::muted() }))
             .child(if s.starting {
                 "· · ·".to_string()
             } else {
@@ -143,7 +144,7 @@ impl Render for ControlBar {
             .danger()
             .rounded_full()
             .size(px(40.))
-            .child(div().size(px(13.)).rounded(px(3.)).bg(rgb(RED)))
+            .child(div().size(px(13.)).rounded(px(3.)).bg(rgb(tk::red())))
             .tooltip(format!("Stop  {}", s.stop_key))
             .on_click(move |_: &ClickEvent, _, cx| clipper.update(cx, |c, cx| c.stop_recording(cx)));
 
@@ -158,7 +159,7 @@ impl Render for ControlBar {
         let mute = icon_button("bar-mute", if s.muted { mic_off_icon() } else { Icon::new(IconName::Mic) }, cx)
             .tooltip(mic_tip)
             .disabled(!s.has_audio)
-            .when(s.muted, |b| b.text_color(rgb(RED)))
+            .when(s.muted, |b| b.text_color(rgb(tk::red())))
             .on_click(move |_: &ClickEvent, _, cx| clipper.update(cx, |c, cx| c.toggle_mute(cx)));
 
         let clipper = self.clipper.clone();
@@ -174,7 +175,7 @@ impl Render for ControlBar {
             icon_button("bar-webcam", icon, cx)
                 .tooltip(tip)
                 .disabled(s.starting || !s.has_webcam)
-                .when(!s.webcam_on, |b| b.text_color(rgb(RED)))
+                .when(!s.webcam_on, |b| b.text_color(rgb(tk::red())))
                 .on_click(move |_: &ClickEvent, _, cx| clipper.update(cx, |c, cx| c.toggle_webcam(cx)))
         });
 
@@ -187,9 +188,9 @@ impl Render for ControlBar {
                 .pl(px(20.))
                 .pr(px(10.))
                 .rounded_full()
-                .bg(rgb(PILL))
+                .bg(rgb(if tk::is_light() { tk::card() } else { PILL }))
                 .border_1()
-                .border_color(rgb(PILL_LINE))
+                .border_color(if tk::is_light() { crate::ui::hairline_strong() } else { rgb(PILL_LINE).into() })
                 .shadow_lg()
                 .child(
                     div().flex_1().flex().items_center().gap_2().child(dot).child(time).when(s.cam_lost, |d| {
@@ -199,7 +200,7 @@ impl Render for ControlBar {
                                 .id("cam-lost")
                                 .size(px(8.))
                                 .rounded_full()
-                                .bg(rgb(0xffb020))
+                                .bg(rgb(tk::warn()))
                                 .tooltip(|window, cx| {
                                     gpui_kit::component::tooltip::Tooltip::new(
                                         "Webcam disconnected. Still recording screen and audio.",
