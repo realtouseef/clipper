@@ -177,14 +177,14 @@ impl Clipper {
         let limit = (o.limit_mb * 1e6) as u64;
         let size = |v: Option<u64>, heavy: bool| -> Div {
             match v {
-                _ if estimating && v.is_none() => div().text_xs().text_color(rgb(tk::muted())).child("Estimating…"),
+                _ if estimating && v.is_none() => div().text_size(px(tk::T12)).text_color(rgb(tk::ink_soft())).child("Estimating..."),
                 Some(b) => {
                     let over = heavy && b > limit;
                     div()
-                        .text_xs()
+                        .text_size(px(tk::T12))
                         .font_weight(FontWeight::MEDIUM)
-                        .text_color(rgb(if over { 0xffb020 } else { tk::muted() }))
-                        .child(format!("{}~{}", if over { "Over · " } else { "" }, formats::size_label(b)))
+                        .text_color(rgb(if over { tk::warning_text() } else { tk::ink_soft() }))
+                        .child(format!("{}~{}", if over { "Over the limit, " } else { "" }, formats::size_label(b)))
                 }
                 None => div(),
             }
@@ -207,7 +207,7 @@ impl Clipper {
                             cx.notify();
                         })),
                 )
-                .child(div().flex().items_center().gap_2().child(div().text_xs().text_color(rgb(tk::muted())).child(sub)).child(size(est, heavy)))
+                .child(div().flex().items_center().gap_2().child(div().text_size(px(tk::T12)).text_color(rgb(tk::ink_soft())).child(sub)).child(size(est, heavy)))
         };
 
         let seg = |id: &'static str, labels: Vec<String>, selected: usize, f: fn(&mut Options, usize), cx: &mut Context<Self>| {
@@ -230,7 +230,7 @@ impl Clipper {
         let fps_labels = || FPS_CHOICES.iter().map(|f| format!("{f}")).collect::<Vec<_>>();
         let width_labels = || WIDTH_CHOICES.iter().map(|w| format!("{w}")).collect::<Vec<_>>();
         let field = |label: &'static str, c: gpui_kit::AnyElement| {
-            div().flex().items_center().gap_3().child(div().w(px(64.)).text_xs().text_color(rgb(tk::muted())).child(label)).child(div().flex_1().child(c))
+            div().flex().items_center().gap_3().child(div().w(px(64.)).text_size(px(tk::T12)).text_color(rgb(tk::ink_soft())).child(label)).child(div().flex_1().child(c))
         };
 
         let gif_opts = o.gif.then(|| {
@@ -239,7 +239,7 @@ impl Clipper {
                 .flex_col()
                 .gap_2()
                 .pl_6()
-                .child(field("FPS", seg("gif-fps", fps_labels(), pos(&FPS_CHOICES, o.gif_opts.fps), |o, i| o.gif_opts.fps = FPS_CHOICES[i], cx).into_any_element()))
+                .child(field("Frame rate", seg("gif-fps", fps_labels(), pos(&FPS_CHOICES, o.gif_opts.fps), |o, i| o.gif_opts.fps = FPS_CHOICES[i], cx).into_any_element()))
                 .child(field("Width", seg("gif-width", width_labels(), pos(&WIDTH_CHOICES, o.gif_opts.width), |o, i| o.gif_opts.width = WIDTH_CHOICES[i], cx).into_any_element()))
                 .child(field(
                     "Colors",
@@ -269,7 +269,7 @@ impl Clipper {
                 .flex_col()
                 .gap_2()
                 .pl_6()
-                .child(field("FPS", seg("webp-fps", fps_labels(), pos(&FPS_CHOICES, o.webp_opts.fps), |o, i| o.webp_opts.fps = FPS_CHOICES[i], cx).into_any_element()))
+                .child(field("Frame rate", seg("webp-fps", fps_labels(), pos(&FPS_CHOICES, o.webp_opts.fps), |o, i| o.webp_opts.fps = FPS_CHOICES[i], cx).into_any_element()))
                 .child(field("Width", seg("webp-width", width_labels(), pos(&WIDTH_CHOICES, o.webp_opts.width), |o, i| o.webp_opts.width = WIDTH_CHOICES[i], cx).into_any_element()))
                 .child(self.knob(Knob::WebpQuality, "Quality", cx))
                 .child(
@@ -288,9 +288,9 @@ impl Clipper {
                     .flex()
                     .items_center()
                     .gap_3()
-                    .child(div().w(px(84.)).text_xs().child(label))
-                    .child(div().flex_1().child(Progress::new(label).value(v).color(rgb(tk::green()))))
-                    .child(div().w(px(36.)).text_xs().text_color(rgb(tk::muted())).child(format!("{v:.0}%")))
+                    .child(div().w(px(84.)).text_size(px(tk::T12)).child(label))
+                    .child(div().flex_1().child(Progress::new(label).value(v).color(rgb(tk::selected()))))
+                    .child(div().w(px(36.)).text_size(px(tk::T12)).text_color(rgb(tk::ink_soft())).child(format!("{v:.0}%")))
             };
             div()
                 .flex()
@@ -310,9 +310,9 @@ impl Clipper {
                 .p_3()
                 .rounded(px(12.))
                 .bg(rgb(tk::raised()))
-                .child(div().text_xs().text_color(rgb(tk::green_ink())).child("Saved"))
+                .child(div().text_size(px(tk::T12)).text_color(rgb(tk::selected())).child("Saved"))
                 .children(d.saved.iter().map(|p| {
-                    div().text_xs().truncate().child(p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default())
+                    div().text_size(px(tk::T12)).truncate().child(p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default())
                 }))
                 .child(
                     button("export-reveal", "Show in Finder", cx)
@@ -339,21 +339,21 @@ impl Clipper {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .child(div().text_base().font_weight(FontWeight::BOLD).child("Export"))
-                    .child(div().text_xs().text_color(rgb(tk::muted())).child(crate::display_path(&self.out_dir))),
+                    .child(div().text_size(px(tk::T15)).font_weight(FontWeight::BOLD).child("Export"))
+                    .child(div().text_size(px(tk::T12)).text_color(rgb(tk::ink_soft())).child(crate::display_path(&self.out_dir))),
             )
-            .child(format_row("fmt-mp4", "MP4", "H.264 + audio", o.mp4, est.and_then(|e| e.mp4), false, |o, v| o.mp4 = v, cx))
+            .child(format_row("fmt-mp4", "MP4", "H.264 with audio", o.mp4, est.and_then(|e| e.mp4), false, |o, v| o.mp4 = v, cx))
             .child(format_row("fmt-gif", "GIF", "no audio", o.gif, est.and_then(|e| e.gif), true, |o, v| o.gif = v, cx))
             .children(gif_opts)
             .child(format_row("fmt-webp", "WebP", "animated, no audio", o.webp, est.and_then(|e| e.webp), true, |o, v| o.webp = v, cx))
             .children(webp_opts)
-            .child(div().h(px(1.)).bg(rgb(tk::line())))
+            .child(div().h(px(1.)).bg(rgb(tk::stone())))
             .child(self.knob(Knob::SizeLimit, "Warn when a GIF or WebP is over", cx))
             .when(over, |d| {
-                d.child(div().text_xs().text_color(rgb(tk::warn())).child("Over your size limit. Try a lower frame rate, a smaller width, or fewer colors."))
+                d.child(div().text_size(px(tk::T12)).text_color(rgb(tk::warning_text())).child("Over your size limit. Try a lower frame rate, a smaller width, or fewer colors."))
             })
             .child(note("GIF and WebP don't carry sound. Captions, webcam and click highlights are in every format. Sizes are estimated from a short sample."))
-            .when_some(d.error.clone(), |c, e| c.child(div().text_xs().text_color(rgb(tk::error())).child(e)))
+            .when_some(d.error.clone(), |c, e| c.child(div().text_size(px(tk::T12)).text_color(rgb(tk::error_text())).child(e)))
             .children(progress)
             .children(saved);
         // The buttons stay visible under the scrolling settings.
@@ -364,10 +364,10 @@ impl Clipper {
             .max_h(gpui_kit::relative(0.9))
             .flex()
             .flex_col()
-            .rounded(px(24.))
-            .bg(rgb(tk::card()))
+            .rounded(px(tk::R_PANEL))
+            .bg(rgb(tk::paper()))
             .border_1()
-            .border_color(crate::ui::hairline_strong())
+            .border_color(crate::ui::hairline())
             .shadow(crate::ui::float_shadow())
             .child(body)
             .child(
@@ -395,11 +395,7 @@ impl Clipper {
                     })
                     .when(!busy, |d| {
                         d.child(
-                            gpui_kit::component::button::Button::new("export-go").cursor_pointer()
-                                .primary()
-                                .rounded_full()
-                                .px_5()
-                                .font_weight(FontWeight::SEMIBOLD)
+                            crate::ui::coral_button("export-go")
                                 .disabled(n == 0)
                                 .label(match n {
                                     0 => "Pick a format".to_string(),
@@ -417,11 +413,10 @@ impl Clipper {
                 .flex()
                 .items_center()
                 .justify_center()
-                .bg(tk::shadow(0.55))
+                .bg(tk::scrim(0.32))
                 .child(card)
                 .text_color(rgb(tk::text())),
         )
     }
 }
 
-use gpui_kit::component::button::ButtonVariants;

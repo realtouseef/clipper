@@ -136,7 +136,7 @@ fn open_with(new_cards: Vec<Card>, notice: Option<Notice>, display: Display, cx:
 fn time_label(stem: &str) -> String {
     let stamp = stem.trim_start_matches("Screenshot_");
     match stamp.split_once('-') {
-        Some((_, t)) if t.len() >= 4 && t[..4].chars().all(|c| c.is_ascii_digit()) => format!("Screenshot · {}:{}", &t[..2], &t[2..4]),
+        Some((_, t)) if t.len() >= 4 && t[..4].chars().all(|c| c.is_ascii_digit()) => format!("Screenshot {}:{}", &t[..2], &t[2..4]),
         _ => "Screenshot".to_string(),
     }
 }
@@ -319,10 +319,11 @@ impl Cards {
             .id(("card-image", i))
             .h(px(IMAGE_H))
             .w_full()
-            .overflow_hidden().rounded_t(px(ui::R_LG - 5.0))
-            .bg(rgb(tk::raised()))
+            .overflow_hidden()
+            .rounded_t(px(tk::R_PANEL - 1.0))
+            .bg(rgb(tk::mist()))
             .cursor_pointer()
-            .children(c.thumb.clone().map(|t| img(t).size_full().rounded_t(px(ui::R_LG - 5.0)).object_fit(ObjectFit::Cover)))
+            .children(c.thumb.clone().map(|t| img(t).size_full().rounded_t(px(tk::R_PANEL - 1.0)).object_fit(ObjectFit::Cover)))
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.edit(p1.clone(), cx)));
         let actions = div()
             .h(px(ACTIONS_H))
@@ -333,23 +334,23 @@ impl Cards {
             .border_t_1()
             .border_color(ui::hairline())
             .child(
-                Button::new(("edit", i)).cursor_pointer().primary().xsmall().rounded_full().px(px(ui::S3)).icon(icons::edit()).label("Edit").on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                Button::new(("edit", i)).cursor_pointer().primary().xsmall().rounded_full().px(px(ui::S3)).font_weight(FontWeight::SEMIBOLD).icon(icons::edit()).label("Edit").on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                     cx.stop_propagation();
                     this.edit(p2.clone(), cx)
                 })),
             )
-            .child(div().flex_1().min_w_0().px(px(ui::S2)).text_xs().text_color(rgb(tk::muted())).truncate().child(name))
-            .child(icon_btn(format!("copy-{i}"), if copied { icons::check() } else { icons::copy() }, if copied { "Copied" } else { "Copy to clipboard" }).when(copied, |b| b.text_color(rgb(tk::green_ink()))).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+            .child(div().flex_1().min_w_0().px(px(ui::S2)).text_size(px(tk::T12)).text_color(rgb(tk::ink_soft())).truncate().child(name))
+            .child(icon_btn(format!("copy-{i}"), if copied { icons::check() } else { icons::copy() }, if copied { "Copied" } else { "Copy  ⌘C" }).when(copied, |b| b.text_color(rgb(tk::success()))).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                 cx.stop_propagation();
                 this.copy(p3.clone(), cx)
             })))
-            .child(icon_btn(format!("save-{i}"), icons::save(), "Save as…").on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+            .child(icon_btn(format!("save-{i}"), icons::save(), "Save as").on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                 cx.stop_propagation();
                 this.save_as(p4.clone(), cx)
             })))
-            // Destructive: last, and red.
+            // Destructive: last.
             .child(
-                icon_btn(format!("delete-{i}"), icons::trash(), "Delete (undo for 5 s)").text_color(rgb(tk::red())).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                icon_btn(format!("delete-{i}"), icons::trash(), "Delete (undo for 5 s)").on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                     cx.stop_propagation();
                     this.delete(p5.clone(), cx)
                 })),
@@ -364,10 +365,10 @@ impl Cards {
                     cx.notify();
                 }
             }))
-            .child(ui::bezel(ui::R_LG, 5.0, div().size_full().flex().flex_col().child(image).child(actions)).size_full())
+            .child(ui::popover().size_full().overflow_hidden().font_family(tk::font()).flex().flex_col().child(image).child(actions))
             .with_animation(
                 gpui_kit::ElementId::Name(format!("card-in-{}", path.display()).into()),
-                gpui_kit::Animation::new(ui::ENTER).with_easing(ui::ease_out),
+                ui::enter(),
                 |el, t| el.opacity(t),
             )
     }
@@ -386,10 +387,10 @@ impl Render for Cards {
                     .flex()
                     .items_center()
                     .rounded_full()
-                    .bg(rgb(tk::card()))
+                    .bg(rgb(tk::mist()))
                     .border_1()
-                    .border_color(ui::hairline_strong())
-                    .text_xs()
+                    .border_color(ui::hairline())
+                    .text_size(px(tk::T12))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(rgb(tk::text()))
                     .child(format!("+{hidden} more")),
@@ -400,7 +401,7 @@ impl Render for Cards {
             col = col.child(el);
         }
         let tick = |color: u32| {
-            div().size(px(20.)).flex_none().rounded_full().bg(rgb(color)).flex().items_center().justify_center().child(icons::check().size(px(12.)).text_color(rgb(tk::on_green())))
+            div().size(px(20.)).flex_none().rounded_full().bg(rgb(color)).flex().items_center().justify_center().child(icons::check().size(px(12.)).text_color(rgb(tk::WHITE)))
         };
         if let Some(left) = self.toast_seconds() {
             col = col.child(
@@ -408,13 +409,13 @@ impl Render for Cards {
                     .pl(px(ui::S2))
                     .w(px(CARD_W))
                     .justify_between()
-                    .child(div().flex().items_center().gap(px(ui::S2)).child(tick(tk::green_ink())).child(format!("Deleted · {left}s")))
+                    .child(div().flex().items_center().gap(px(ui::S2)).child(tick(tk::success())).child(format!("Deleted, undo for {left} s")))
                     .child(
                         Button::new("undo").cursor_pointer()
                             .ghost()
                             .small()
                             .rounded_full()
-                            .text_color(rgb(tk::green_ink()))
+                            .font_weight(FontWeight::SEMIBOLD)
                             .label("Undo")
                             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.undo(cx))),
                     ),
@@ -428,8 +429,8 @@ impl Render for Cards {
                     .py(px(ui::S2))
                     .pr(px(ui::S4))
                     .items_start()
-                    .child(div().mt(px(5.)).size(px(8.)).flex_none().rounded_full().bg(rgb(tk::red())))
-                    .child(div().text_xs().line_height(px(16.)).child(msg.clone()))
+                    .child(div().mt(px(5.)).size(px(8.)).flex_none().rounded_full().bg(rgb(tk::error())))
+                    .child(div().text_size(px(tk::T12)).line_height(px(16.)).child(msg.clone()))
                     .tooltip({
                         let m = msg.clone();
                         move |window, cx| Tooltip::new(m.clone()).build(window, cx)

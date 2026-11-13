@@ -9,7 +9,7 @@ use crate::region::Display;
 use gpui_kit::prelude::*;
 use gpui_kit::{
     AnyWindowHandle, App, DisplayId, FocusHandle, FontWeight, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent,
-    Window, WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions, div, hsla, px, rgb,
+    Window, WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions, div, px, rgb,
 };
 
 type Done = Box<dyn Fn(Option<WindowInfo>, &mut App)>;
@@ -71,7 +71,7 @@ impl Render for Picker {
             .relative()
             .track_focus(&self.focus)
             .cursor_pointer()
-            .bg(hsla(0., 0., 0., 0.18))
+            .bg(tk::scrim(0.18))
             .on_mouse_move(cx.listener(|this, ev: &MouseMoveEvent, _, cx| {
                 let g = this.global((f32::from(ev.position.x), f32::from(ev.position.y)));
                 let hover = window_at(&this.windows, g).cloned();
@@ -104,14 +104,15 @@ impl Render for Picker {
                     .px_4()
                     .py_2()
                     .rounded_full()
-                    .bg(hsla(0., 0., 0., 0.8))
-                    .text_sm()
-                    .text_color(rgb(0xffffff))
-                    .child("Click a window to capture it · Esc to cancel"),
+                    .bg(tk::alpha(tk::DARK.paper, 0.92))
+                    .text_size(px(tk::T13))
+                    .font_family(tk::font())
+                    .text_color(rgb(tk::DARK.ink))
+                    .child("Click a window to capture it. Press Esc to cancel."),
             );
         let Some(w) = &self.hover else { return root.child(hint) };
         let (x, y) = ((w.x - self.display.origin.0) as f32, (w.y - self.display.origin.1) as f32);
-        let label = if w.title.is_empty() { w.app.clone() } else { format!("{} — {}", w.app, w.title) };
+        let label = if w.title.is_empty() { w.app.clone() } else { format!("{}: {}", w.app, w.title) };
         let px_size = format!("{} × {}", (w.w * self.display.scale).round(), (w.h * self.display.scale).round());
         root.child(
             div()
@@ -122,8 +123,8 @@ impl Render for Picker {
                 .h(px(w.h as f32))
                 .rounded(px(10.))
                 .border_2()
-                .border_color(rgb(tk::DARK.green))
-                .bg(hsla(0.27, 0.85, 0.72, 0.18))
+                .border_color(rgb(tk::DARK.ink))
+                .bg(tk::alpha(tk::DARK.ink, 0.12))
                 .flex()
                 .items_center()
                 .justify_center()
@@ -135,11 +136,11 @@ impl Render for Picker {
                         .gap_1()
                         .px_4()
                         .py_2()
-                        .rounded(px(12.))
-                        .bg(rgb(tk::DARK.green))
-                        .text_color(rgb(tk::DARK.on_green))
-                        .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).max_w(px(360.)).truncate().child(label))
-                        .child(div().text_xs().child(px_size)),
+                        .rounded(px(tk::R_PANEL))
+                        .bg(rgb(tk::DARK.ink))
+                        .text_color(rgb(tk::DARK.paper))
+                        .child(div().text_size(px(tk::T13)).font_weight(FontWeight::SEMIBOLD).max_w(px(360.)).truncate().child(label))
+                        .child(div().text_size(px(tk::T12)).child(px_size)),
                 ),
         )
         .child(hint)

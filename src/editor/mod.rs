@@ -40,7 +40,8 @@ pub fn copy_image(img: &RgbaImage, cx: &mut App) -> Result<()> {
     Ok(())
 }
 
-/// Lucide icons (ISC, `assets/icons/editor/LICENSE-LUCIDE`).
+/// The one icon set: Lucide outline icons (ISC, `assets/icons/editor/LICENSE-LUCIDE`), drawn
+/// at 20 px with a 1.75 px stroke.
 pub mod icons {
     use gpui_kit::component::Icon;
     macro_rules! icons {
@@ -57,10 +58,12 @@ pub mod icons {
         rotate_left => "rotate-ccw", rotate_right => "rotate-cw", flip_h => "flip-horizontal-2",
         flip_v => "flip-vertical-2", lock => "lock", unlock => "lock-open", trash => "trash",
         front => "bring-to-front", back => "send-to-back", duplicate => "copy-plus", edit => "pencil",
-        camera => "camera", emoji => "smile", layout => "layout-template", captions => "captions",
-        settings => "settings-2", monitor => "monitor", region => "square-dashed", zoom => "zoom-in", folder => "folder-open",
+        camera => "camera", emoji => "smile", monitor => "monitor", region => "square-dashed", zoom => "zoom-in", folder => "folder-open",
         forward => "layers-arrow-up", backward => "layers-arrow-down", image => "image",
         merge => "images", callout => "scan-search", add_image => "image-plus", check => "check",
         sun => "sun", moon => "moon", sun_moon => "sun-moon",
-    }
+        back_arrow => "arrow-left", more => "ellipsis", plus => "plus", search => "search", help => "circle-help",
+        panel_right => "panel-right", collapse => "chevrons-down-up", expand => "chevrons-up-down", import => "import", record => "circle-dot",
+        muted => "volume-x", film => "film", play => "play", pause => "pause", stop => "square-stop",
+        scissors => "scissors", sparkles => "wand-sparkles",     }
 }

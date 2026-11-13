@@ -19,8 +19,8 @@ use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::prelude::*;
 use gpui_kit::{ClickEvent, Div, Entity, FontWeight, SharedString, Window, div, px, rgb};
 
-const TEXT_COLORS: [u32; 6] = [0xffffff, 0xfacc15, 0xa4f47c, 0x22d3ee, 0xf472b6, 0x0a0a0b];
-const PILL_COLORS: [u32; 5] = [0x000000, 0x18181a, 0xffffff, 0x1e3a8a, 0x7c3aed];
+const TEXT_COLORS: [u32; 6] = tk::content::CAPTION_TEXT;
+const PILL_COLORS: [u32; 5] = tk::content::CAPTION_PILL;
 
 /// Captions settings behind the tab.
 #[derive(Clone, Copy, Debug)]
@@ -276,7 +276,7 @@ impl Clipper {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .child(div().text_sm().font_weight(FontWeight::MEDIUM).child("Auto captions"))
+                    .child(div().text_size(px(tk::T13)).font_weight(FontWeight::MEDIUM).child("Auto captions"))
                     .child(toggle),
             )
             .child(note("Transcribed on this Mac after you stop recording. Nothing is uploaded."));
@@ -290,7 +290,7 @@ impl Clipper {
             body = body.child(section("Model", self.model_section(cx)));
         }
         body.when_some(self.cap_error.clone(), |d, e| {
-            d.child(div().p_3().rounded(px(12.)).bg(rgb(tk::raised())).text_xs().text_color(rgb(tk::error())).child(e))
+            d.child(div().p_3().rounded(px(12.)).bg(rgb(tk::raised())).text_size(px(tk::T12)).text_color(rgb(tk::error_text())).child(e))
         })
     }
 
@@ -318,7 +318,7 @@ impl Clipper {
         let dl = self.download.as_ref().filter(|d| d.model.id == m.id);
         let busy = self.download.is_some();
         let partial = m.partial();
-        let info = format!("{} · ~{} MB RAM", m.size_label(), m.ram_mb);
+        let info = format!("{}, about {} MB of memory", m.size_label(), m.ram_mb);
         let recommended = m.id == models::RECOMMENDED;
         let action: gpui_kit::AnyElement = match (dl, installed) {
             (Some(d), _) => {
@@ -327,8 +327,8 @@ impl Clipper {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .child(div().w(px(70.)).child(Progress::new(("dl", m.size as usize)).value(pct).color(rgb(tk::green()))))
-                    .child(div().w(px(30.)).text_xs().text_color(rgb(tk::muted())).child(format!("{pct:.0}%")))
+                    .child(div().w(px(70.)).child(Progress::new(("dl", m.size as usize)).value(pct).color(rgb(tk::selected()))))
+                    .child(div().w(px(30.)).text_size(px(tk::T12)).text_color(rgb(tk::ink_soft())).child(format!("{pct:.0}%")))
                     .child(
                         button("dl-cancel", "Cancel", cx)
                             .xsmall()
@@ -345,14 +345,14 @@ impl Clipper {
                 .flex()
                 .items_center()
                 .gap_2()
-                .child(div().text_xs().font_weight(gpui_kit::FontWeight::MEDIUM).text_color(rgb(tk::green_ink())).child("Ready"))
+                .child(div().text_size(px(tk::T12)).font_weight(gpui_kit::FontWeight::MEDIUM).text_color(rgb(tk::selected())).child("Ready"))
                 .child(
                     gpui_kit::component::button::Button::new(SharedString::from(format!("del-{}", m.id))).cursor_pointer()
                         .ghost()
                         .xsmall()
                         .rounded_full()
                         .icon(crate::editor::icons::trash())
-                        .text_color(rgb(tk::red()))
+                        .text_color(rgb(tk::error_text()))
                         .tooltip("Delete model")
                         .disabled(self.stt.is_some() && selected)
                         .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
@@ -401,21 +401,21 @@ impl Clipper {
                     .min_w_0()
                     .flex()
                     .flex_col()
-                    .child(div().text_sm().truncate().child(m.name))
+                    .child(div().text_size(px(tk::T13)).truncate().child(m.name))
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(div().text_xs().text_color(rgb(tk::muted())).truncate().child(info))
+                            .child(div().text_size(px(tk::T12)).text_color(rgb(tk::ink_soft())).truncate().child(info))
                             .when(recommended, |d| {
                                 d.child(
                                     div()
                                         .px(px(6.))
                                         .rounded_full()
                                         .bg(crate::ui::accent_tint())
-                                        .text_color(rgb(tk::green_ink()))
-                                        .text_xs()
+                                        .text_color(rgb(tk::selected()))
+                                        .text_size(px(tk::T12))
                                         .font_weight(gpui_kit::FontWeight::MEDIUM)
                                         .child("Recommended"),
                                 )
@@ -435,11 +435,11 @@ impl Clipper {
                         .flex()
                         .items_center()
                         .justify_between()
-                        .text_sm()
-                        .child("Transcribing…")
-                        .child(div().text_xs().text_color(rgb(tk::muted())).child(format!("{pct:.0}%"))),
+                        .text_size(px(tk::T13))
+                        .child("Transcribing...")
+                        .child(div().text_size(px(tk::T12)).text_color(rgb(tk::ink_soft())).child(format!("{pct:.0}%"))),
                 )
-                .child(Progress::new("stt").value(pct).color(rgb(tk::green())))
+                .child(Progress::new("stt").value(pct).color(rgb(tk::selected())))
                 .child(
                     button("stt-cancel", "Cancel", cx)
                         .small()
@@ -496,8 +496,8 @@ impl Clipper {
             let text: gpui_kit::AnyElement = match editing {
                 Some(state) => Input::new(&state).small().into_any_element(),
                 None => div()
-                    .text_sm()
-                    .text_color(rgb(if is_now { tk::text() } else { tk::text_soft() }))
+                    .text_size(px(tk::T13))
+                    .text_color(rgb(if is_now { tk::text() } else { tk::text() }))
                     .child(c.text.replace('\n', " "))
                     .into_any_element(),
             };
@@ -564,8 +564,8 @@ impl Clipper {
                 }))
                 .child(
                     div()
-                        .text_xs()
-                        .text_color(rgb(if is_now { tk::green_ink() } else { tk::muted() }))
+                        .text_size(px(tk::T12))
+                        .text_color(rgb(if is_now { tk::selected() } else { tk::ink_soft() }))
                         .child(format!("{} – {}", captions::short_time(c.start), captions::short_time(c.end))),
                 )
                 .child(text)
@@ -579,10 +579,10 @@ impl Clipper {
                 div()
                     .flex()
                     .justify_between()
-                    .text_xs()
-                    .text_color(rgb(tk::muted()))
+                    .text_size(px(tk::T12))
+                    .text_color(rgb(tk::ink_soft()))
                     .child(format!("{n} caption{}", if n == 1 { "" } else { "s" }))
-                    .child("Click a caption to fix it · Enter saves"),
+                    .child("Click a caption to fix it. Enter saves."),
             )
             // The kit's scroll area: the panel scrolls too, and plain nested scrolling would
             // lose the wheel to it.
@@ -610,9 +610,9 @@ impl Clipper {
                     .p(px(2.))
                     .rounded(px(9.))
                     .border_2()
-                    .border_color(rgb(if selected { tk::text() } else { tk::card() }))
+                    .border_color(rgb(if selected { tk::text() } else { tk::mist() }))
                     .cursor_pointer()
-                    .child(div().size_full().rounded(px(6.)).border_1().border_color(rgb(tk::line())).bg(rgb(v)))
+                    .child(div().size_full().rounded(px(6.)).border_1().border_color(rgb(tk::stone())).bg(rgb(v)))
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                         set(&mut this.cap_style, hex_color(v));
                         cx.notify();
@@ -686,11 +686,11 @@ impl Clipper {
 }
 
 fn field(label: &'static str, control: impl IntoElement) -> Div {
-    div().flex().flex_col().gap_1().child(div().text_xs().text_color(rgb(tk::muted())).child(label)).child(control)
+    div().flex().flex_col().gap_1().child(div().text_size(px(tk::T12)).text_color(rgb(tk::ink_soft())).child(label)).child(control)
 }
 
 fn row(label: &'static str, control: impl IntoElement) -> Div {
-    div().flex().items_center().justify_between().gap_2().child(div().text_sm().child(label)).child(control)
+    div().flex().items_center().justify_between().gap_2().child(div().text_size(px(tk::T13)).child(label)).child(control)
 }
 
 impl Clipper {

@@ -31,42 +31,31 @@ pub enum Shape {
     Radial(f32, f32),
 }
 
-/// A built-in gradient: color stops at positions 0..=1 along `shape`.
+/// A built-in gradient: color stops at positions 0..=1 along `shape`. `id` is the preset's
+/// id since it first shipped (favorites refer to it).
 pub struct Gradient {
+    pub id: &'static str,
     pub name: &'static str,
     pub shape: Shape,
     pub stops: &'static [(f32, Color)],
 }
 
 macro_rules! g {
-    ($name:literal, $shape:expr, [$(($p:expr, $c:expr)),+ $(,)?]) => {
-        Gradient { name: $name, shape: $shape, stops: &[$(($p, hex($c))),+] }
+    ($id:literal, $name:literal, $shape:expr, [$(($p:expr, $c:expr)),+ $(,)?]) => {
+        Gradient { id: $id, name: $name, shape: $shape, stops: &[$(($p, hex($c))),+] }
     };
 }
 
-use Shape::{Linear, Radial};
+use Shape::Linear;
 
-pub const GRADIENTS: [Gradient; 20] = [
-    g!("Dawn", Linear(112.0), [(0.09, 0x72a7e8), (0.44, 0xfd8152), (0.55, 0xfd8152), (0.86, 0xf9ca56)]),
-    g!("Night fade", Linear(0.0), [(0.0, 0xfcc5e4), (0.15, 0xfda34b), (0.35, 0xff7882), (0.52, 0xc8699e), (0.71, 0x7046aa), (0.87, 0x0c1db8), (1.0, 0x020f75)]),
-    g!("Deep sea", Radial(0.1, 0.2), [(0.0, 0x02254e), (0.2, 0x04387e), (1.0, 0x55f5dd)]),
-    g!("Lagoon", Linear(112.0), [(0.0, 0x003844), (0.52, 0xa3d9b9), (0.89, 0xe79406)]),
-    g!("Grape", Radial(0.03, 0.5), [(0.0, 0x4a1180), (0.84, 0x9a1d8f)]),
-    g!("Lime", Linear(120.0), [(0.0, 0xd4fc79), (1.0, 0x96e6a1)]),
-    g!("Meadow", Linear(91.0), [(0.05, 0x489a4e), (0.96, 0xfbce46)]),
-    g!("Honey", Linear(108.0), [(0.08, 0xf3ec8c), (0.9, 0xfc980f)]),
-    g!("Abyss", Linear(110.0), [(0.11, 0x0f0202), (0.91, 0x24a3be)]),
-    g!("Dusk blue", Linear(135.0), [(0.0, 0xfbc8b4), (1.0, 0x2447b1)]),
-    g!("Neon", Linear(110.0), [(0.0, 0xf635a6), (1.0, 0x36d860)]),
-    g!("Mint sky", Linear(120.0), [(0.0, 0x84fab0), (1.0, 0x8fd3f4)]),
-    g!("Ocean", Linear(90.0), [(0.0, 0x4facfe), (1.0, 0x00f2fe)]),
-    g!("Royal", Linear(90.0), [(0.0, 0x0acffe), (1.0, 0x495aff)]),
-    g!("Plum", Linear(0.0), [(0.0, 0xa18cd1), (1.0, 0xfbc2eb)]),
-    g!("Orchid", Linear(0.0), [(0.0, 0xc471f5), (1.0, 0xfa71cd)]),
-    g!("Mango", Linear(90.0), [(0.0, 0xfa709a), (1.0, 0xfee140)]),
-    g!("Rose", Linear(45.0), [(0.0, 0xff9a9e), (1.0, 0xfad0c4)]),
-    g!("Indigo", Linear(0.0), [(0.0, 0x30cfd0), (1.0, 0x330867)]),
-    g!("Midnight", Linear(180.0), [(0.0, 0x334155), (1.0, 0x020617)]),
+/// The five built-in gradient presets: one light, three colorful, one dark. (The others
+/// that used to ship live on in `assets/gradients/legacy.tsv` for migration only.)
+pub const GRADIENTS: [Gradient; 5] = [
+    g!("app:11", "Mint sky", Linear(120.0), [(0.0, 0x84fab0), (1.0, 0x8fd3f4)]),
+    g!("app:16", "Mango", Linear(90.0), [(0.0, 0xfa709a), (1.0, 0xfee140)]),
+    g!("app:15", "Orchid", Linear(0.0), [(0.0, 0xc471f5), (1.0, 0xfa71cd)]),
+    g!("app:12", "Ocean", Linear(90.0), [(0.0, 0x4facfe), (1.0, 0x00f2fe)]),
+    g!("app:19", "Midnight", Linear(180.0), [(0.0, 0x334155), (1.0, 0x020617)]),
 ];
 
 /// A built-in background image, bundled into the app (`assets/backgrounds`).
@@ -519,8 +508,9 @@ mod tests {
 
     #[test]
     fn gradients_and_wallpapers_render() {
-        // "Night fade" runs bottom→top: pale pink at the bottom, deep blue at the top.
-        let nf = crate::backgrounds::render::gradient(&crate::backgrounds::presets::builtin_gradient(1), 10, 100);
+        // "Night fade" (a removed preset, from the legacy table) runs bottom→top: pale pink at
+        // the bottom, deep blue at the top.
+        let nf = crate::backgrounds::render::gradient(&crate::backgrounds::presets::legacy("app:1").unwrap().1, 10, 100);
         assert!(nf.get_pixel(5, 99)[0] > 200 && nf.get_pixel(5, 0)[2] > nf.get_pixel(5, 0)[0]);
         for (i, wp) in WALLPAPERS.iter().enumerate() {
             let img = render_wallpaper(i, 27, 48);

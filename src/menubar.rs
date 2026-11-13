@@ -159,10 +159,10 @@ pub fn install(shortcut: &str) {
             }
         };
         let _ = shortcut; // the hotkey follows the Shots tab's mode, so it isn't shown on either
-        add("Capture Full Screen", Action::ShotFull, "", 0);
-        add("Capture Region…", Action::ShotRegion, "", 0);
-        add("Edit Image…", Action::EditImage, "", 0);
-        add("Record Screen", Action::Record, "", 0);
+        add("Capture full screen", Action::ShotFull, "", 0);
+        add("Capture region", Action::ShotRegion, "", 0);
+        add("Edit an image", Action::EditImage, "", 0);
+        add("Record screen", Action::Record, "", 0);
         send1(menu, c"addItem:", send0(class(c"NSMenuItem"), c"separatorItem"));
         add("Open Clipper", Action::Open, "", 0);
         send1(menu, c"addItem:", send0(class(c"NSMenuItem"), c"separatorItem"));

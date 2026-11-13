@@ -319,7 +319,7 @@ pub fn canvas_preview(
                         .top(px(r.y as f32 * s))
                         .w(px(r.w as f32 * s))
                         .h(px(r.h as f32 * s))
-                        .bg(gpui::hsla(0., 0., 0., 1.0 - crate::composite::DIM)),
+                        .bg(crate::theme::scrim(1.0 - crate::composite::DIM)),
                 )
             })
             .child(video)

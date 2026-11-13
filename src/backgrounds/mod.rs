@@ -3,7 +3,7 @@
 //!
 //! - `Background`: what is shown (solid color, static gradient, animated gradient, image).
 //! - `render`: the renderer, a pure function of (background, size, time).
-//! - `presets` / `generators`: the gradient library and harmony generator.
+//! - `presets` / `generators`: the five built-in gradients and the harmony generator.
 //! - `library`: the user's images, favorites, saved gradients, watched folder.
 //! - `fit`: cover / contain and focal-point crop math.
 

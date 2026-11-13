@@ -1,0 +1,573 @@
+# Gradient presets removed in 0.4 (id, name, shape, stops). Only read to migrate
+# favorites that pointed at them; never shown. uiGradients and WebGradients, MIT.
+app:0	Dawn	L112	0.09:72a7e8 0.44:fd8152 0.55:fd8152 0.86:f9ca56
+app:1	Night fade	L0	0:fcc5e4 0.15:fda34b 0.35:ff7882 0.52:c8699e 0.71:7046aa 0.87:0c1db8 1:020f75
+app:2	Deep sea	R0.1,0.2	0:02254e 0.2:04387e 1:55f5dd
+app:3	Lagoon	L112	0:003844 0.52:a3d9b9 0.89:e79406
+app:4	Grape	R0.03,0.5	0:4a1180 0.84:9a1d8f
+app:5	Lime	L120	0:d4fc79 1:96e6a1
+app:6	Meadow	L91	0.05:489a4e 0.96:fbce46
+app:7	Honey	L108	0.08:f3ec8c 0.9:fc980f
+app:8	Abyss	L110	0.11:0f0202 0.91:24a3be
+app:9	Dusk blue	L135	0:fbc8b4 1:2447b1
+app:10	Neon	L110	0:f635a6 1:36d860
+app:13	Royal	L90	0:0acffe 1:495aff
+app:14	Plum	L0	0:a18cd1 1:fbc2eb
+app:17	Rose	L45	0:ff9a9e 1:fad0c4
+app:18	Indigo	L0	0:30cfd0 1:330867
+ug:Omolon	Omolon	L90	0:091e3a 0.5:2f80ed 1:2d9ee0
+ug:Farhan	Farhan	L90	0:9400d3 1:4b0082
+ug:Purple	Purple	L90	0:c84e89 1:f15f79
+ug:Ibtesam	Ibtesam	L90	0:00f5a0 1:00d9f5
+ug:Radioactive Heat	Radioactive Heat	L90	0:f7941e 0.5:72c6ef 1:00a651
+ug:The Sky And The Sea	The Sky And The Sea	L90	0:f7941e 1:004e8f
+ug:From Ice To Fire	From Ice To Fire	L90	0:72c6ef 1:004e8f
+ug:Blue & Orange	Blue & Orange	L90	0:fd8112 1:0085ca
+ug:Purple Dream	Purple Dream	L90	0:bf5ae0 1:a811da
+ug:Blu	Blu	L90	0:00416a 1:e4e5e6
+ug:Summer Breeze	Summer Breeze	L90	0:fbed96 1:abecd6
+ug:Ver	Ver	L90	0:ffe000 1:799f0c
+ug:Ver Black	Ver Black	L90	0:f7f8f8 1:acbb78
+ug:Combi	Combi	L90	0:00416a 0.5:799f0c 1:ffe000
+ug:Anwar	Anwar	L90	0:334d50 1:cbcaa5
+ug:Bluelagoo	Bluelagoo	L90	0:0052d4 0.5:4364f7 1:6fb1fc
+ug:Lunada	Lunada	L90	0:5433ff 0.5:20bdff 1:a5fecb
+ug:Reaqua	Reaqua	L90	0:799f0c 1:acbb78
+ug:Mango	Mango	L90	0:ffe259 1:ffa751
+ug:Bupe	Bupe	L90	0:00416a 1:e4e5e6
+ug:Rea	Rea	L90	0:ffe000 1:799f0c
+ug:Windy	Windy	L90	0:acb6e5 1:86fde8
+ug:Royal Blue	Royal Blue	L90	0:536976 1:292e49
+ug:Royal Blue + Petrol	Royal Blue + Petrol	L90	0:bbd2c5 0.5:536976 1:292e49
+ug:Copper	Copper	L90	0:b79891 1:94716b
+ug:Anamnisar	Anamnisar	L90	0:9796f0 1:fbc7d4
+ug:Petrol	Petrol	L90	0:bbd2c5 1:536976
+ug:Sky	Sky	L90	0:076585 1:ffffff
+ug:Sel	Sel	L90	0:00467f 1:a5cc82
+ug:Afternoon	Afternoon	L90	0:000c40 1:607d8b
+ug:Skyline	Skyline	L90	0:1488cc 1:2b32b2
+ug:DIMIGO	DIMIGO	L90	0:ec008c 1:fc6767
+ug:Purple Love	Purple Love	L90	0:cc2b5e 1:753a88
+ug:Sexy Blue	Sexy Blue	L90	0:2193b0 1:6dd5ed
+ug:Blooker20	Blooker20	L90	0:e65c00 1:f9d423
+ug:Sea Blue	Sea Blue	L90	0:2b5876 1:4e4376
+ug:Nimvelo	Nimvelo	L90	0:314755 1:26a0da
+ug:Hazel	Hazel	L90	0:77a1d3 0.5:79cbca 1:e684ae
+ug:Noon to Dusk	Noon to Dusk	L90	0:ff6e7f 1:bfe9ff
+ug:YouTube	YouTube	L90	0:e52d27 1:b31217
+ug:Cool Brown	Cool Brown	L90	0:603813 1:b29f94
+ug:Harmonic Energy	Harmonic Energy	L90	0:16a085 1:f4d03f
+ug:Playing with Reds	Playing with Reds	L90	0:d31027 1:ea384d
+ug:Sunny Days	Sunny Days	L90	0:ede574 1:e1f5c4
+ug:Green Beach	Green Beach	L90	0:02aab0 1:00cdac
+ug:Intuitive Purple	Intuitive Purple	L90	0:da22ff 1:9733ee
+ug:Emerald Water	Emerald Water	L90	0:348f50 1:56b4d3
+ug:Lemon Twist	Lemon Twist	L90	0:3ca55c 1:b5ac49
+ug:Monte Carlo	Monte Carlo	L90	0:cc95c0 0.5:dbd4b4 1:7aa1d2
+ug:Horizon	Horizon	L90	0:003973 1:e5e5be
+ug:Rose Water	Rose Water	L90	0:e55d87 1:5fc3e4
+ug:Frozen	Frozen	L90	0:403b4a 1:e7e9bb
+ug:Mango Pulp	Mango Pulp	L90	0:f09819 1:edde5d
+ug:Bloody Mary	Bloody Mary	L90	0:ff512f 1:dd2476
+ug:Aubergine	Aubergine	L90	0:aa076b 1:61045f
+ug:Aqua Marine	Aqua Marine	L90	0:1a2980 1:26d0ce
+ug:Sunrise	Sunrise	L90	0:ff512f 1:f09819
+ug:Purple Paradise	Purple Paradise	L90	0:1d2b64 1:f8cdda
+ug:Stripe	Stripe	L90	0:1fa2ff 0.5:12d8fa 1:a6ffcb
+ug:Sea Weed	Sea Weed	L90	0:4cb8c4 1:3cd3ad
+ug:Pinky	Pinky	L90	0:dd5e89 1:f7bb97
+ug:Cherry	Cherry	L90	0:eb3349 1:f45c43
+ug:Mojito	Mojito	L90	0:1d976c 1:93f9b9
+ug:Juicy Orange	Juicy Orange	L90	0:ff8008 1:ffc837
+ug:Mirage	Mirage	L90	0:16222a 1:3a6073
+ug:Steel Gray	Steel Gray	L90	0:1f1c2c 1:928dab
+ug:Kashmir	Kashmir	L90	0:614385 1:516395
+ug:Electric Violet	Electric Violet	L90	0:4776e6 1:8e54e9
+ug:Venice Blue	Venice Blue	L90	0:085078 1:85d8ce
+ug:Bora Bora	Bora Bora	L90	0:2bc0e4 1:eaecc6
+ug:Moss	Moss	L90	0:134e5e 1:71b280
+ug:Shroom Haze	Shroom Haze	L90	0:5c258d 1:4389a2
+ug:Mystic	Mystic	L90	0:757f9a 1:d7dde8
+ug:Midnight City	Midnight City	L90	0:232526 1:414345
+ug:Sea Blizz	Sea Blizz	L90	0:1cd8d2 1:93edc7
+ug:Opa	Opa	L90	0:3d7eaa 1:ffe47a
+ug:Titanium	Titanium	L90	0:283048 1:859398
+ug:Mantle	Mantle	L90	0:24c6dc 1:514a9d
+ug:Dracula	Dracula	L90	0:dc2424 1:4a569d
+ug:Peach	Peach	L90	0:ed4264 1:ffedbc
+ug:Moonrise	Moonrise	L90	0:dae2f8 1:d6a4a4
+ug:Clouds	Clouds	L90	0:ece9e6 1:ffffff
+ug:Stellar	Stellar	L90	0:7474bf 1:348ac7
+ug:Bourbon	Bourbon	L90	0:ec6f66 1:f3a183
+ug:Calm Darya	Calm Darya	L90	0:5f2c82 1:49a09d
+ug:Influenza	Influenza	L90	0:c04848 1:480048
+ug:Shrimpy	Shrimpy	L90	0:e43a15 1:e65245
+ug:Army	Army	L90	0:414d0b 1:727a17
+ug:Miaka	Miaka	L90	0:fc354c 1:0abfbc
+ug:Pinot Noir	Pinot Noir	L90	0:4b6cb7 1:182848
+ug:Day Tripper	Day Tripper	L90	0:f857a6 1:ff5858
+ug:Namn	Namn	L90	0:a73737 1:7a2828
+ug:Blurry Beach	Blurry Beach	L90	0:d53369 1:cbad6d
+ug:Vasily	Vasily	L90	0:e9d362 1:333333
+ug:A Lost Memory	A Lost Memory	L90	0:de6262 1:ffb88c
+ug:Petrichor	Petrichor	L90	0:666600 1:999966
+ug:Jonquil	Jonquil	L90	0:ffeeee 1:ddefbb
+ug:Sirius Tamed	Sirius Tamed	L90	0:efefbb 1:d4d3dd
+ug:Kyoto	Kyoto	L90	0:c21500 1:ffc500
+ug:Misty Meadow	Misty Meadow	L90	0:215f00 1:e4e4d9
+ug:Aqualicious	Aqualicious	L90	0:50c9c3 1:96deda
+ug:Moor	Moor	L90	0:616161 1:9bc5c3
+ug:Almost	Almost	L90	0:ddd6f3 1:faaca8
+ug:Forever Lost	Forever Lost	L90	0:5d4157 1:a8caba
+ug:Winter	Winter	L90	0:e6dada 1:274046
+ug:Nelson	Nelson	L90	0:f2709c 1:ff9472
+ug:Autumn	Autumn	L90	0:dad299 1:b0dab9
+ug:Candy	Candy	L90	0:d3959b 1:bfe6ba
+ug:Reef	Reef	L90	0:00d2ff 1:3a7bd5
+ug:The Strain	The Strain	L90	0:870000 1:190a05
+ug:Dirty Fog	Dirty Fog	L90	0:b993d6 1:8ca6db
+ug:Earthly	Earthly	L90	0:649173 1:dbd5a4
+ug:Virgin	Virgin	L90	0:c9ffbf 1:ffafbd
+ug:Ash	Ash	L90	0:606c88 1:3f4c6b
+ug:Cherryblossoms	Cherryblossoms	L90	0:fbd3e9 1:bb377d
+ug:Parklife	Parklife	L90	0:add100 1:7b920a
+ug:Dance To Forget	Dance To Forget	L90	0:ff4e50 1:f9d423
+ug:Starfall	Starfall	L90	0:f0c27b 1:4b1248
+ug:Red Mist	Red Mist	L90	0:000000 1:e74c3c
+ug:Teal Love	Teal Love	L90	0:aaffa9 1:11ffbd
+ug:Neon Life	Neon Life	L90	0:b3ffab 1:12fff7
+ug:Man of Steel	Man of Steel	L90	0:780206 1:061161
+ug:Amethyst	Amethyst	L90	0:9d50bb 1:6e48aa
+ug:Cheer Up Emo Kid	Cheer Up Emo Kid	L90	0:556270 1:ff6b6b
+ug:Shore	Shore	L90	0:70e1f5 1:ffd194
+ug:Facebook Messenger	Facebook Messenger	L90	0:00c6ff 1:0072ff
+ug:SoundCloud	SoundCloud	L90	0:fe8c00 1:f83600
+ug:Behongo	Behongo	L90	0:52c234 1:061700
+ug:ServQuick	ServQuick	L90	0:485563 1:29323c
+ug:Friday	Friday	L90	0:83a4d4 1:b6fbff
+ug:Martini	Martini	L90	0:fdfc47 1:24fe41
+ug:Metallic Toad	Metallic Toad	L90	0:abbaab 1:ffffff
+ug:Between The Clouds	Between The Clouds	L90	0:73c8a9 1:373b44
+ug:Crazy Orange I	Crazy Orange I	L90	0:d38312 1:a83279
+ug:Hersheys	Hersheys	L90	0:1e130c 1:9a8478
+ug:Talking To Mice Elf	Talking To Mice Elf	L90	0:948e99 1:2e1437
+ug:Purple Bliss	Purple Bliss	L90	0:360033 1:0b8793
+ug:Predawn	Predawn	L90	0:ffa17f 1:00223e
+ug:Endless River	Endless River	L90	0:43cea2 1:185a9d
+ug:Pastel Orange at the Sun	Pastel Orange at the Sun	L90	0:ffb347 1:ffcc33
+ug:Twitch	Twitch	L90	0:6441a5 1:2a0845
+ug:Atlas	Atlas	L90	0:feac5e 0.5:c779d0 1:4bc0c8
+ug:Instagram	Instagram	L90	0:833ab4 0.5:fd1d1d 1:fcb045
+ug:Flickr	Flickr	L90	0:ff0084 1:33001b
+ug:Vine	Vine	L90	0:00bf8f 1:001510
+ug:Turquoise flow	Turquoise flow	L90	0:136a8a 1:267871
+ug:Portrait	Portrait	L90	0:8e9eab 1:eef2f3
+ug:Virgin America	Virgin America	L90	0:7b4397 1:dc2430
+ug:Koko Caramel	Koko Caramel	L90	0:d1913c 1:ffd194
+ug:Fresh Turboscent	Fresh Turboscent	L90	0:f1f2b5 1:135058
+ug:Green to dark	Green to dark	L90	0:6a9113 1:141517
+ug:Ukraine	Ukraine	L90	0:004ff9 1:fff94c
+ug:Curiosity blue	Curiosity blue	L90	0:525252 1:3d72b4
+ug:Dark Knight	Dark Knight	L90	0:ba8b02 1:181818
+ug:Piglet	Piglet	L90	0:ee9ca7 1:ffdde1
+ug:Lizard	Lizard	L90	0:304352 1:d7d2cc
+ug:Sage Persuasion	Sage Persuasion	L90	0:ccccb2 1:757519
+ug:Between Night and Day	Between Night and Day	L90	0:2c3e50 1:3498db
+ug:Timber	Timber	L90	0:fc00ff 1:00dbde
+ug:Passion	Passion	L90	0:e53935 1:e35d5b
+ug:Clear Sky	Clear Sky	L90	0:005c97 1:363795
+ug:Master Card	Master Card	L90	0:f46b45 1:eea849
+ug:Back To Earth	Back To Earth	L90	0:00c9ff 1:92fe9d
+ug:Deep Purple	Deep Purple	L90	0:673ab7 1:512da8
+ug:Little Leaf	Little Leaf	L90	0:76b852 1:8dc26f
+ug:Netflix	Netflix	L90	0:8e0e00 1:1f1c18
+ug:Light Orange	Light Orange	L90	0:ffb75e 1:ed8f03
+ug:Green and Blue	Green and Blue	L90	0:c2e59c 1:64b3f4
+ug:Poncho	Poncho	L90	0:403a3e 1:be5869
+ug:Back to the Future	Back to the Future	L90	0:c02425 1:f0cb35
+ug:Blush	Blush	L90	0:b24592 1:f15f79
+ug:Inbox	Inbox	L90	0:457fca 1:5691c8
+ug:Purplin	Purplin	L90	0:6a3093 1:a044ff
+ug:Pale Wood	Pale Wood	L90	0:eacda3 1:d6ae7b
+ug:Haikus	Haikus	L90	0:fd746c 1:ff9068
+ug:Pizelex	Pizelex	L90	0:114357 1:f29492
+ug:Joomla	Joomla	L90	0:1e3c72 1:2a5298
+ug:Christmas	Christmas	L90	0:2f7336 1:aa3a38
+ug:Minnesota Vikings	Minnesota Vikings	L90	0:5614b0 1:dbd65c
+ug:Miami Dolphins	Miami Dolphins	L90	0:4da0b0 1:d39d38
+ug:Forest	Forest	L90	0:5a3f37 1:2c7744
+ug:Nighthawk	Nighthawk	L90	0:2980b9 1:2c3e50
+ug:Superman	Superman	L90	0:0099f7 1:f11712
+ug:Suzy	Suzy	L90	0:834d9b 1:d04ed6
+ug:Dark Skies	Dark Skies	L90	0:4b79a1 1:283e51
+ug:Deep Space	Deep Space	L90	0:000000 1:434343
+ug:Decent	Decent	L90	0:4ca1af 1:c4e0e5
+ug:Colors Of Sky	Colors Of Sky	L90	0:e0eafc 1:cfdef3
+ug:Purple White	Purple White	L90	0:ba5370 1:f4e2d8
+ug:Ali	Ali	L90	0:ff4b1f 1:1fddff
+ug:Alihossein	Alihossein	L90	0:f7ff00 1:db36a4
+ug:Shahabi	Shahabi	L90	0:a80077 1:66ff00
+ug:Red Ocean	Red Ocean	L90	0:1d4350 1:a43931
+ug:Tranquil	Tranquil	L90	0:eecda3 1:ef629f
+ug:Transfile	Transfile	L90	0:16bffd 1:cb3066
+ug:Sylvia	Sylvia	L90	0:ff4b1f 1:ff9068
+ug:Sweet Morning	Sweet Morning	L90	0:ff5f6d 1:ffc371
+ug:Politics	Politics	L90	0:2196f3 1:f44336
+ug:Bright Vault	Bright Vault	L90	0:00d2ff 1:928dab
+ug:Solid Vault	Solid Vault	L90	0:3a7bd5 1:3a6073
+ug:Sunset	Sunset	L90	0:0b486b 1:f56217
+ug:Grapefruit Sunset	Grapefruit Sunset	L90	0:e96443 1:904e95
+ug:Deep Sea Space	Deep Sea Space	L90	0:2c3e50 1:4ca1af
+ug:Dusk	Dusk	L90	0:2c3e50 1:fd746c
+ug:Minimal Red	Minimal Red	L90	0:f00000 1:dc281e
+ug:Royal	Royal	L90	0:141e30 1:243b55
+ug:Mauve	Mauve	L90	0:42275a 1:734b6d
+ug:Frost	Frost	L90	0:000428 1:004e92
+ug:Lush	Lush	L90	0:56ab2f 1:a8e063
+ug:Firewatch	Firewatch	L90	0:cb2d3e 1:ef473a
+ug:Sherbert	Sherbert	L90	0:f79d00 1:64f38c
+ug:Blood Red	Blood Red	L90	0:f85032 1:e73827
+ug:Sun on the Horizon	Sun on the Horizon	L90	0:fceabb 1:f8b500
+ug:IIIT Delhi	IIIT Delhi	L90	0:808080 1:3fada8
+ug:Jupiter	Jupiter	L90	0:ffd89b 1:19547b
+ug:50 Shades of Grey	50 Shades of Grey	L90	0:bdc3c7 1:2c3e50
+ug:Dania	Dania	L90	0:be93c5 1:7bc6cc
+ug:Limeade	Limeade	L90	0:a1ffce 1:faffd1
+ug:Disco	Disco	L90	0:4ecdc4 1:556270
+ug:Love Couple	Love Couple	L90	0:3a6186 1:89253e
+ug:Azure Pop	Azure Pop	L90	0:ef32d9 1:89fffd
+ug:Nepal	Nepal	L90	0:de6161 1:2657eb
+ug:Cosmic Fusion	Cosmic Fusion	L90	0:ff00cc 1:333399
+ug:Snapchat	Snapchat	L90	0:fffc00 1:ffffff
+ug:Ed's Sunset Gradient	Ed's Sunset Gradient	L90	0:ff7e5f 1:feb47b
+ug:Brady Brady Fun Fun	Brady Brady Fun Fun	L90	0:00c3ff 1:ffff1c
+ug:Black Rosé	Black Rosé	L90	0:f4c4f3 1:fc67fa
+ug:80's Purple	80's Purple	L90	0:41295a 1:2f0743
+ug:Radar	Radar	L90	0:a770ef 0.5:cf8bf3 1:fdb99b
+ug:Ibiza Sunset	Ibiza Sunset	L90	0:ee0979 1:ff6a00
+ug:Dawn	Dawn	L90	0:f3904f 1:3b4371
+ug:Mild	Mild	L90	0:67b26f 1:4ca2cd
+ug:Vice City	Vice City	L90	0:3494e6 1:ec6ead
+ug:Jaipur	Jaipur	L90	0:dbe6f6 1:c5796d
+ug:Jodhpur	Jodhpur	L90	0:9cecfb 0.5:65c7f7 1:0052d4
+ug:Cocoaa Ice	Cocoaa Ice	L90	0:c0c0aa 1:1cefff
+ug:EasyMed	EasyMed	L90	0:dce35b 1:45b649
+ug:Rose Colored Lenses	Rose Colored Lenses	L90	0:e8cbc0 1:636fa4
+ug:What lies Beyond	What lies Beyond	L90	0:f0f2f0 1:000c40
+ug:Roseanna	Roseanna	L90	0:ffafbd 1:ffc3a0
+ug:Honey Dew	Honey Dew	L90	0:43c6ac 1:f8ffae
+ug:Under the Lake	Under the Lake	L90	0:093028 1:237a57
+ug:The Blue Lagoon	The Blue Lagoon	L90	0:43c6ac 1:191654
+ug:Can You Feel The Love Tonight	Can You Feel The Love Tonight	L90	0:4568dc 1:b06ab3
+ug:Very Blue	Very Blue	L90	0:0575e6 1:021b79
+ug:Love and Liberty	Love and Liberty	L90	0:200122 1:6f0000
+ug:Orca	Orca	L90	0:44a08d 1:093637
+ug:Venice	Venice	L90	0:6190e8 1:a7bfe8
+ug:Pacific Dream	Pacific Dream	L90	0:34e89e 1:0f3443
+ug:Learning and Leading	Learning and Leading	L90	0:f7971e 1:ffd200
+ug:Celestial	Celestial	L90	0:c33764 1:1d2671
+ug:Purplepine	Purplepine	L90	0:20002c 1:cbb4d4
+ug:Sha la la	Sha la la	L90	0:d66d75 1:e29587
+ug:Mini	Mini	L90	0:30e8bf 1:ff8235
+ug:Maldives	Maldives	L90	0:b2fefa 1:0ed2f7
+ug:Cinnamint	Cinnamint	L90	0:4ac29a 1:bdfff3
+ug:Html	Html	L90	0:e44d26 1:f16529
+ug:Coal	Coal	L90	0:eb5757 1:000000
+ug:Sunkist	Sunkist	L90	0:f2994a 1:f2c94c
+ug:Blue Skies	Blue Skies	L90	0:56ccf2 1:2f80ed
+ug:Chitty Chitty Bang Bang	Chitty Chitty Bang Bang	L90	0:007991 1:78ffd6
+ug:Visions of Grandeur	Visions of Grandeur	L90	0:000046 1:1cb5e0
+ug:Crystal Clear	Crystal Clear	L90	0:159957 1:155799
+ug:Mello	Mello	L90	0:c0392b 1:8e44ad
+ug:Compare Now	Compare Now	L90	0:ef3b36 1:ffffff
+ug:Meridian	Meridian	L90	0:283c86 1:45a247
+ug:Relay	Relay	L90	0:3a1c71 0.5:d76d77 1:ffaf7b
+ug:Alive	Alive	L90	0:cb356b 1:bd3f32
+ug:Scooter	Scooter	L90	0:36d1dc 1:5b86e5
+ug:Terminal	Terminal	L90	0:000000 1:0f9b0f
+ug:Telegram	Telegram	L90	0:1c92d2 1:f2fcfe
+ug:Crimson Tide	Crimson Tide	L90	0:642b73 1:c6426e
+ug:Socialive	Socialive	L90	0:06beb6 1:48b1bf
+ug:Subu	Subu	L90	0:0cebeb 0.5:20e3b2 1:29ffc6
+ug:Broken Hearts	Broken Hearts	L90	0:d9a7c7 1:fffcdc
+ug:Kimoby Is The New Blue	Kimoby Is The New Blue	L90	0:396afc 1:2948ff
+ug:Dull	Dull	L90	0:c9d6ff 1:e2e2e2
+ug:Purpink	Purpink	L90	0:7f00ff 1:e100ff
+ug:Orange Coral	Orange Coral	L90	0:ff9966 1:ff5e62
+ug:Summer	Summer	L90	0:22c1c3 1:fdbb2d
+ug:King Yna	King Yna	L90	0:1a2a6c 0.5:b21f1f 1:fdbb2d
+ug:Velvet Sun	Velvet Sun	L90	0:e1eec3 1:f05053
+ug:Zinc	Zinc	L90	0:ada996 0.3333:f2f2f2 0.6667:dbdbdb 1:eaeaea
+ug:Hydrogen	Hydrogen	L90	0:667db6 0.3333:0082c8 0.6667:0082c8 1:667db6
+ug:Argon	Argon	L90	0:03001e 0.3333:7303c0 0.6667:ec38bc 1:fdeff9
+ug:Lithium	Lithium	L90	0:6d6027 1:d3cbb8
+ug:Digital Water	Digital Water	L90	0:74ebd5 1:acb6e5
+ug:Orange Fun	Orange Fun	L90	0:fc4a1a 1:f7b733
+ug:Rainbow Blue	Rainbow Blue	L90	0:00f260 1:0575e6
+ug:Pink Flavour	Pink Flavour	L90	0:800080 1:ffc0cb
+ug:Sulphur	Sulphur	L90	0:cac531 1:f3f9a7
+ug:Selenium	Selenium	L90	0:3c3b3f 1:605c3c
+ug:Delicate	Delicate	L90	0:d3cce3 1:e9e4f0
+ug:Ohhappiness	Ohhappiness	L90	0:00b09b 1:96c93d
+ug:Lawrencium	Lawrencium	L90	0:0f0c29 0.5:302b63 1:24243e
+ug:Relaxing red	Relaxing red	L90	0:fffbd5 1:b20a2c
+ug:Taran Tado	Taran Tado	L90	0:23074d 1:cc5333
+ug:Bighead	Bighead	L90	0:c94b4b 1:4b134f
+ug:Sublime Vivid	Sublime Vivid	L90	0:fc466b 1:3f5efb
+ug:Sublime Light	Sublime Light	L90	0:fc5c7d 1:6a82fb
+ug:Pun Yeta	Pun Yeta	L90	0:108dc7 1:ef8e38
+ug:Quepal	Quepal	L90	0:11998e 1:38ef7d
+ug:Sand to Blue	Sand to Blue	L90	0:3e5151 1:decba4
+ug:Wedding Day Blues	Wedding Day Blues	L90	0:40e0d0 0.5:ff8c00 1:ff0080
+ug:Shifter	Shifter	L90	0:bc4e9c 1:f80759
+ug:Red Sunset	Red Sunset	L90	0:355c7d 0.5:6c5b7b 1:c06c84
+ug:Moon Purple	Moon Purple	L90	0:4e54c8 1:8f94fb
+ug:Pure Lust	Pure Lust	L90	0:333333 1:dd1818
+ug:Slight Ocean View	Slight Ocean View	L90	0:a8c0ff 1:3f2b96
+ug:eXpresso	eXpresso	L90	0:ad5389 1:3c1053
+ug:Shifty	Shifty	L90	0:636363 1:a2ab58
+ug:Vanusa	Vanusa	L90	0:da4453 1:89216b
+ug:Evening Night	Evening Night	L90	0:005aa7 1:fffde4
+ug:Magic	Magic	L90	0:59c173 0.5:a17fe0 1:5d26c1
+ug:Margo	Margo	L90	0:ffefba 1:ffffff
+ug:Blue Raspberry	Blue Raspberry	L90	0:00b4db 1:0083b0
+ug:Citrus Peel	Citrus Peel	L90	0:fdc830 1:f37335
+ug:Sin City Red	Sin City Red	L90	0:ed213a 1:93291e
+ug:Rastafari	Rastafari	L90	0:1e9600 0.5:fff200 1:ff0000
+ug:Summer Dog	Summer Dog	L90	0:a8ff78 1:78ffd6
+ug:Wiretap	Wiretap	L90	0:8a2387 0.5:e94057 1:f27121
+ug:Burning Orange	Burning Orange	L90	0:ff416c 1:ff4b2b
+ug:Ultra Voilet	Ultra Voilet	L90	0:654ea3 1:eaafc8
+ug:By Design	By Design	L90	0:009fff 1:ec2f4b
+ug:Kyoo Tah	Kyoo Tah	L90	0:544a7d 1:ffd452
+ug:Kye Meh	Kye Meh	L90	0:8360c3 1:2ebf91
+ug:Kyoo Pal	Kyoo Pal	L90	0:dd3e54 1:6be585
+ug:Metapolis	Metapolis	L90	0:659999 1:f4791f
+ug:Flare	Flare	L90	0:f12711 1:f5af19
+ug:Witching Hour	Witching Hour	L90	0:c31432 1:240b36
+ug:Azur Lane	Azur Lane	L90	0:7f7fd5 0.5:86a8e7 1:91eae4
+ug:Neuromancer	Neuromancer	L90	0:f953c6 1:b91d73
+ug:Harvey	Harvey	L90	0:1f4037 1:99f2c8
+ug:Amin	Amin	L90	0:8e2de2 1:4a00e0
+ug:Memariani	Memariani	L90	0:aa4b6b 0.5:6b6b83 1:3b8d99
+ug:Yoda	Yoda	L90	0:ff0099 1:493240
+ug:Cool Sky	Cool Sky	L90	0:2980b9 0.5:6dd5fa 1:ffffff
+ug:Dark Ocean	Dark Ocean	L90	0:373b44 1:4286f4
+ug:Evening Sunshine	Evening Sunshine	L90	0:b92b27 1:1565c0
+ug:JShine	JShine	L90	0:12c2e9 0.5:c471ed 1:f64f59
+ug:Moonlit Asteroid	Moonlit Asteroid	L90	0:0f2027 0.5:203a43 1:2c5364
+ug:MegaTron	MegaTron	L90	0:c6ffdd 0.5:fbd786 1:f7797d
+ug:Cool Blues	Cool Blues	L90	0:2193b0 1:6dd5ed
+ug:Piggy Pink	Piggy Pink	L90	0:ee9ca7 1:ffdde1
+ug:Grade Grey	Grade Grey	L90	0:bdc3c7 1:2c3e50
+ug:Telko	Telko	L90	0:f36222 0.5:5cb644 1:007fc3
+ug:Zenta	Zenta	L90	0:2a2d3e 1:fecb6e
+ug:Electric Peacock	Electric Peacock	L90	0:8a2be2 0.3333:0000cd 0.6667:228b22 1:ccff00
+ug:Under Blue Green	Under Blue Green	L90	0:051937 0.25:004d7a 0.5:008793 0.75:00bf72 1:a8eb12
+ug:Lensod	Lensod	L90	0:6025f5 1:ff5555
+ug:Newspaper	Newspaper	L90	0:8a2be2 0.5:ffa500 1:f8f8ff
+ug:Dark Blue Gradient	Dark Blue Gradient	L90	0:2774ae 0.5:002e5d 1:002e5d
+ug:Dark Blu Two	Dark Blu Two	L90	0:004680 1:4484ba
+ug:Lemon Lime	Lemon Lime	L90	0:7ec6bc 1:ebe717
+ug:Beleko	Beleko	L90	0:ff1e56 0.5:f9c942 1:1e90ff
+ug:Mango Papaya	Mango Papaya	L90	0:de8a41 1:2ada53
+ug:Unicorn Rainbow	Unicorn Rainbow	L90	0:f7f0ac 0.5:acf7f0 1:f0acf7
+ug:Flame	Flame	L90	0:ff0000 1:fdcf58
+ug:Blue Red	Blue Red	L90	0:36b1c7 1:960b33
+ug:Twitter	Twitter	L90	0:1da1f2 1:009ffc
+ug:Blooze	Blooze	L90	0:6da6be 0.5:4b859e 1:6da6be
+ug:Blue Slate	Blue Slate	L90	0:b5b9ff 1:2b2c49
+ug:Space Light Green	Space Light Green	L90	0:9fa0a8 1:5c7852
+ug:Flower	Flower	L90	0:dcffbd 1:cc86d1
+ug:Elate The Euge	Elate The Euge	L90	0:8bdeda 0.25:43add0 0.5:998ee0 0.75:e17dc2 1:ef9393
+ug:Peach Sea	Peach Sea	L90	0:e6ae8c 1:a8cecf
+ug:Abbas	Abbas	L90	0:00fff0 1:0083fe
+ug:Winter Woods	Winter Woods	L90	0:333333 0.5:a2ab58 1:a43931
+ug:Ameena	Ameena	L90	0:0c0c6d 0.25:de512b 0.5:98d0c1 0.75:5bb226 1:023c0d
+ug:Emerald Sea	Emerald Sea	L90	0:05386b 1:5cdb95
+ug:Bleem	Bleem	L90	0:4284db 1:29eac4
+ug:Coffee Gold	Coffee Gold	L90	0:554023 1:c99846
+ug:Compass	Compass	L90	0:516b8b 1:056b3b
+ug:Andreuzza's	Andreuzza's	L90	0:d70652 1:ff025e
+ug:Moonwalker	Moonwalker	L90	0:152331 1:000000
+ug:Whinehouse	Whinehouse	L90	0:f7f7f7 0.25:b9a0a0 0.5:794747 0.75:4e2020 1:111111
+ug:Hyper Blue	Hyper Blue	L90	0:59cde9 1:0a2a88
+ug:Racker	Racker	L90	0:eb0000 0.5:95008a 1:3300fc
+ug:After the Rain	After the Rain	L90	0:ff75c3 0.2:ffa647 0.4:ffe83f 0.6:9fff5b 0.8:70e2ff 1:cd93ff
+ug:Neon Green	Neon Green	L90	0:81ff8a 1:64965e
+ug:Dusty Grass	Dusty Grass	L90	0:d4fc79 1:96e6a1
+ug:Visual Blue	Visual Blue	L90	0:003d4d 1:00c996
+wg:001	Warm Flame	L45	0:ff9a9e 0.99:fad0c4 1:fad0c4
+wg:002	Night Fade	L0	0:a18cd1 1:fbc2eb
+wg:003	Spring Warmth	L0	0:fad0c4 0.01:fad0c4 1:ffd1ff
+wg:004	Juicy Peach	L90	0:ffecd2 1:fcb69f
+wg:005	Young Passion	L90	0:ff8177 0:ff867a 0.21:ff8c7f 0.52:f99185 0.78:cf556c 1:b12a5b
+wg:006	Lady Lips	L0	0:ff9a9e 0.99:fecfef 1:fecfef
+wg:007	Sunny Morning	L120	0:f6d365 1:fda085
+wg:008	Rainy Ashville	L0	0:fbc2eb 1:a6c1ee
+wg:009	Frozen Dreams	L0	0:fdcbf1 0.01:fdcbf1 1:e6dee9
+wg:010	Winter Neva	L120	0:a1c4fd 1:c2e9fb
+wg:011	Dusty Grass	L120	0:d4fc79 1:96e6a1
+wg:012	Tempting Azure	L120	0:84fab0 1:8fd3f4
+wg:013	Heavy Rain	L0	0:cfd9df 1:e2ebf0
+wg:014	Amy Crisp	L120	0:a6c0fe 1:f68084
+wg:015	Mean Fruit	L120	0:fccb90 1:d57eeb
+wg:016	Lilac Sky	L120	0:e0c3fc 1:8ec5fc
+wg:017	Ripe Malinka	L120	0:f093fb 1:f5576c
+wg:018	Cloudy Knoxville	L120	0:fdfbfb 1:ebedee
+wg:019	Malibu Beach	L0	0:4facfe 1:00f2fe
+wg:020	New Life	L0	0:43e97b 1:38f9d7
+wg:021	True Sunset	L0	0:fa709a 1:fee140
+wg:022	Morpheus Den	L0	0:30cfd0 1:330867
+wg:023	Rare Wind	L0	0:a8edea 1:fed6e3
+wg:024	Near Moon	L0	0:5ee7df 1:b490ca
+wg:025	Wild Apple	L0	0:d299c2 1:fef9d7
+wg:026	Saint Petersburg	L135	0:f5f7fa 1:c3cfe2
+wg:027	Arielle's Smile	L0	0:16d9e3 0.47:30c7ec 1:46aef7
+wg:028	Plum Plate	L135	0:667eea 1:764ba2
+wg:029	Everlasting Sky	L135	0:fdfcfb 1:e2d1c3
+wg:030	Happy Fisher	L120	0:89f7fe 1:66a6ff
+wg:031	Blessing	L0	0:fddb92 1:d1fdff
+wg:032	Sharpeye Eagle	L0	0:9890e3 1:b1f4cf
+wg:033	Ladoga Bottom	L0	0:ebc0fd 1:d9ded8
+wg:034	Lemon Gate	L0	0:96fbc4 1:f9f586
+wg:035	Itmeo Branding	L180	0:2af598 1:009efd
+wg:036	Zeus Miracle	L0	0:cd9cf2 1:f6f3ff
+wg:037	Old Hat	L0	0:e4afcb 0:b8cbb8 0:b8cbb8 0.3:e2c58b 0.64:c2ce9c 1:7edbdc
+wg:038	Star Wine	L0	0:b8cbb8 0:b8cbb8 0:b465da 0.33:cf6cc9 0.66:ee609c 1:ee609c
+wg:039	Deep Blue	L0	0:6a11cb 1:2575fc
+wg:041	Happy Acid	L0	0:37ecba 1:72afd3
+wg:042	Awesome Pine	L0	0:ebbba7 1:cfc7f8
+wg:043	New York	L0	0:fff1eb 1:ace0f9
+wg:044	Shy Rainbow	L0	0:eea2a2 0.19:bbc1bf 0.42:57c6e1
+wg:046	Mixed Hopes	L0	0:c471f5 1:fa71cd
+wg:047	Fly High	L0	0:48c6ef 1:6f86d6
+wg:048	Strong Bliss	L0	0:f78ca0 0.19:f9748f 0.6:fd868c
+wg:049	Fresh Milk	L0	0:feada6 1:f5efef
+wg:050	Snow Again	L0	0:e6e9f0 1:eef1f5
+wg:051	February Ink	L0	0:accbee 1:e7f0fd
+wg:052	Kind Steel	L-20	0:e9defa 1:fbfcdb
+wg:053	Soft Grass	L0	0:c1dfc4 1:deecdd
+wg:054	Grown Early	L0	0:0ba360 1:3cba92
+wg:055	Sharp Blues	L0	0:00c6fb 1:005bea
+wg:056	Shady Water	L0	0:74ebd5 1:9face6
+wg:057	Dirty Beauty	L0	0:6a85b6 1:bac8e0
+wg:058	Great Whale	L0	0:a3bded 1:6991c7
+wg:059	Teen Notebook	L0	0:9795f0 1:fbc8d4
+wg:060	Polite Rumors	L0	0:a7a6cb 0.52:8989ba 1:8989ba
+wg:061	Sweet Period	L0	0:3f51b1 0.13:5a55ae 0.25:7b5fac 0.38:8f6aae 0.5:a86aa4 0.62:cc6b8e 0.75:f18271 0.87:f3a469 1:f7c978
+wg:062	Wide Matrix	L0	0:fcc5e4 0.15:fda34b 0.35:ff7882 0.52:c8699e 0.71:7046aa 0.87:0c1db8 1:020f75
+wg:063	Soft Cherish	L0	0:dbdcd7 0.24:dddcd7 0.3:e2c9cc 0.46:e7627d 0.59:b8235a 0.71:801357 0.84:3d1635 1:1c1a27
+wg:064	Red Salvation	L0	0:f43b47 1:453a94
+wg:065	Burning Spring	L0	0:4fb576 0.3:44c489 0.46:28a9ae 0.59:28a2b7 0.71:4c7788 0.8:6c4f63 1:432c39
+wg:066	Night Party	L0	0:0250c5 1:d43f8d
+wg:067	Sky Glider	L0	0:88d3ce 1:6e45e2
+wg:068	Heaven Peach	L0	0:d9afd9 1:97d9e1
+wg:069	Purple Division	L0	0:7028e4 1:e5b2ca
+wg:070	Aqua Splash	L15	0:13547a 1:80d0c7
+wg:071	Above Clouds	L0	0:bdbbbe 1:9d9ea3
+wg:072	Spiky Naga	L0	0:505285 0.12:585e92 0.25:65689f
+wg:073	Love Kiss	L0	0:ff0844 1:ffb199
+wg:075	Clean Mirror	L45	0:93a5cf 1:e4efe9
+wg:076	Premium Dark	L0	0:434343 1:000000
+wg:077	Cold Evening	L0	0:0c3483 1:a2b6df 1:6b8cce
+wg:078	Cochiti Lake	L45	0:93a5cf 1:e4efe9
+wg:079	Summer Games	L0	0:92fe9d 1:00c9ff
+wg:080	Passionate Bed	L0	0:ff758c 1:ff7eb3
+wg:081	Mountain Rock	L0	0:868f96 1:596164
+wg:082	Desert Hump	L0	0:c79081 1:dfa579
+wg:083	Jungle Day	L45	0:8baaaa 1:ae8b9c
+wg:084	Phoenix Start	L0	0:f83600 1:f9d423
+wg:085	October Silence	L-20	0:b721ff 1:21d4fd
+wg:086	Faraway River	L-20	0:6e45e2 1:88d3ce
+wg:087	Alchemist Lab	L-20	0:d558c8 1:24d292
+wg:088	Over Sun	L60	0:abecd6 1:fbed96
+wg:089	Premium White	L0	0:d5d4d0 0.01:d5d4d0 0.31:eeeeec
+wg:090	Mars Party	L0	0:5f72bd 1:9b23ea
+wg:091	Eternal Constance	L0	0:09203f 1:537895
+wg:092	Japan Blush	L-20	0:ddd6f3 1:faaca8 1:faaca8
+wg:093	Smiling Rain	L-20	0:dcb0ed 1:99c99c
+wg:094	Cloudy Apple	L0	0:f3e7e9 0.99:e3eeff 1:e3eeff
+wg:095	Big Mango	L0	0:c71d6f 1:d09693
+wg:096	Healthy Water	L60	0:96deda 1:50c9c3
+wg:097	Amour Amour	L0	0:f77062 1:fe5196
+wg:098	Risky Concrete	L0	0:c4c5c7 0.52:dcdddf 1:ebebeb
+wg:099	Strong Stick	L0	0:a8caba 1:5d4157
+wg:100	Vicious Stance	L60	0:29323c 1:485563
+wg:101	Palo Alto	L-60	0:16a085 1:f4d03f
+wg:102	Happy Memories	L-60	0:ff5858 1:f09819
+wg:103	Midnight Bloom	L-20	0:2b5876 1:4e4376
+wg:104	Crystalline	L-20	0:00cdac 1:8ddad5
+wg:105	Raccoon Back	L-180	0:bcc5ce 0.98:929ead
+wg:106	Party Bliss	L0	0:4481eb 1:04befe
+wg:107	Confident Cloud	L0	0:dad4ec 0.01:dad4ec 1:f3e7e9
+wg:108	Le Cocktail	L45	0:874da2 1:c43a30
+wg:109	River City	L0	0:4481eb 1:04befe
+wg:110	Frozen Berry	L0	0:e8198b 1:c7eafd
+wg:111	Elegance	L0	0.59:eadfdf 1:ece2df
+wg:112	Child Care	L-20	0:f794a4 1:fdd6bd
+wg:113	Flying Lemon	L60	0:64b3f4 1:c2e59c
+wg:114	New Retrowave	L0	0:3b41c5 0.49:a981bb 1:ffc8a9
+wg:115	Hidden Jaguar	L0	0:0fd850 1:f9f047
+wg:116	Above The Sky	L0	0:d3d3d3 0.01:d3d3d3 0.26:e0e0e0
+wg:117	Nega	L45	0:ee9ca7 1:ffdde1
+wg:118	Dense Water	L0	0:3ab5b0 0.31:3d99be 1:56317a
+wg:120	Seashore	L0	0:209cff 1:68e0cf
+wg:121	Marble Wall	L0	0:bdc2e8 0.01:bdc2e8 1:e6dee9
+wg:122	Cheerful Caramel	L0	0:e6b980 1:eacda3
+wg:123	Night Sky	L0	0:1e3c72 0.01:1e3c72 1:2a5298
+wg:124	Magic Lake	L0	0:d5dee7 0:ffafbd 1:c9ffbf
+wg:125	Young Grass	L0	0:9be15d 1:00e3ae
+wg:126	Colorful Peach	L0	0:ed6ea0 1:ec8c69
+wg:127	Gentle Care	L0	0:ffc3a0 1:ffafbd
+wg:128	Plum Bath	L0	0:cc208e 1:6713d2
+wg:129	Happy Unicorn	L0	0:b3ffab 1:12fff7
+wg:130	Full Metal	L0	0:d5dee7 0.5:e8ebf2 1:e2e7ed
+wg:131	African Field	L0	0:65bd60 0.25:5ac1a8 0.5:3ec6ed
+wg:132	Solid Stone	L0	0:243949 1:517fa4
+wg:133	Orange Juice	L-20	0:fc6076 1:ff9a44
+wg:134	Glass Water	L0	0:dfe9f3 1:ffffff
+wg:136	North Miracle	L0	0:00dbde 1:fc00ff
+wg:137	Fruit Blend	L0	0:f9d423 1:ff4e50
+wg:138	Millennium Pine	L0	0:50cc7f 1:f5d100
+wg:139	High Flight	L0	0:0acffe 1:495aff
+wg:140	Mole Hall	L-20	0:616161 1:9bc5c3
+wg:142	Space Shift	L60	0:3d3393 0.37:2b76b9 0.65:2cacd1 1:35eb93
+wg:143	Forest Inei	L0	0:df89b5 1:bfd9fe
+wg:144	Royal Garden	L0	0:ed6ea0 1:ec8c69
+wg:145	Rich Metal	L0	0:d7d2cc 1:304352
+wg:146	Juicy Cake	L0	0:e14fad 1:f9d423
+wg:147	Smart Indigo	L0	0:b224ef 1:7579ff
+wg:148	Sand Strike	L0	0:c1c161 0:c1c161 1:d4d4b1
+wg:149	Norse Beauty	L0	0:ec77ab 1:7873f5
+wg:150	Aqua Guidance	L0	0:007adf 1:00ecbc
+wg:151	Sun Veggie	L-225	0:20e2d7 1:f9fea5
+wg:152	Sea Lord	L-225	0:2cd8d5 0.56:c5c1ff 1:ffbac3
+wg:153	Black Sea	L-225	0:2cd8d5 0.48:6b8dd6 1:8e37d7
+wg:154	Grass Shampoo	L-225	0:dfffcd 0.48:90f9c4 1:39f3bb
+wg:155	Landing Aircraft	L-225	0:5d9fff 0.48:b8dcff 1:6bbbff
+wg:156	Witch Dance	L-225	0:a8bfff 1:884d80
+wg:157	Sleepless Night	L-225	0:5271c4 0.48:b19fff 1:eca1fe
+wg:158	Angel Care	L-225	0:ffe29f 0.48:ffa99f 1:ff719a
+wg:159	Crystal River	L-225	0:22e1ff 0.48:1d8fe1 1:625eb1
+wg:160	Soft Lipstick	L-225	0:b6cee8 1:f578dc
+wg:161	Salt Mountain	L-225	0:fffeff 1:d7fffe
+wg:162	Perfect White	L-225	0:e3fdf5 1:ffe6fa
+wg:163	Fresh Oasis	L-225	0:7de2fc 1:b9b6e5
+wg:164	Strict November	L-225	0:cbbacc 1:2580b3
+wg:165	Morning Salad	L-225	0:b7f8db 1:50a7c2
+wg:166	Deep Relief	L-225	0:7085b6 0.5:87a7d9 1:def3f8
+wg:167	Sea Strike	L-225	0:77ffd2 0.48:6297db 1:1eecff
+wg:168	Night Call	L-225	0:ac32e4 0.48:7918f2 1:4801ff
+wg:169	Supreme Sky	L-225	0:d4ffec 0.48:57f2cc 1:4596fb
+wg:170	Light Blue	L-225	0:9efbd3 0.48:57e9f2 1:45d4fb
+wg:171	Mind Crawl	L-225	0:473b7b 0.51:3584a7 1:30d2be
+wg:172	Lily Meadow	L-225	0:65379b 0.53:886aea 1:6457c6
+wg:173	Sugar Lollipop	L-225	0:a445b2 0.52:d41872 1:ff0066
+wg:174	Sweet Dessert	L-225	0:7742b2 0.52:f180ff 1:fd8bd9
+wg:175	Magic Ray	L-225	0:ff3cac 0.52:562b7c 1:2b86c5
+wg:176	Teen Party	L-225	0:ff057c 0.5:8d0b93 1:321575
+wg:177	Frozen Heat	L-225	0:ff057c 0.48:7c64d5 1:4cc3ff
+wg:178	Gagarin View	L-225	0:69eacb 0.48:eaccf8 1:6654f1
+wg:179	Fabled Sunset	L-225	0:231557 0.29:44107a 0.67:ff1361
+wg:180	Perfect Blue	L-225	0:3d4e81 0.48:5753c9 1:6e7ff3

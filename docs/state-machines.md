@@ -13,6 +13,12 @@ struct) and add it here.
 | Machine | Type | States | Notes |
 |---|---|---|---|
 | App lifecycle | `Stage` (`src/main.rs`) | Idle → Starting → Recording → Processing → Review ⇄ Exporting, Error | Transitions and invariants are documented on the type. Debug builds log broken invariants (`Clipper::stage_violations`). |
+| Main window screen while idle | `Screen` (`src/main.rs`) | Library, Studio | Only read in `Stage::Idle`; every other stage shows the editor. `reset` returns to Library. |
+| Header popover | `HeaderMenu` (main window and `editor::view`) | None, More, Shortcuts | One popover at a time; the discard dialog is `confirm_discard`. |
+| Tool pill flyout | `editor::view::Flyout` (in an `Option`) | none, Shapes, More | More holds the groups that don't fit the stage width. |
+| Library overlay | `home::Overlay` | None, Create, Menu(path), Rename(path) | One menu or dialog over the grid at a time. |
+| Library thumbnail | `home::Slot` (per item) | Loading, Ready, Failed | At most 4 in flight; Ready ones far from view are released. |
+| Library delete | `home::Deleted` (in an `Option`) | none / waiting out the 5 s undo | A new delete finishes the previous one. |
 | Pointer gesture (main window) | `timeline::Gesture` | None, Seek, Zoom, Trim, Cam, Knob | One gesture at a time. `Trim` carries the edit from before the drag, which becomes a single undo step on release (`finish_gesture`). `holds_playback()` pauses preview playback and audio. |
 | Idle webcam preview | `webcam::LivePreview` | Off, Running(Live), Failed | `Failed` sticks (no retry loop against a denied camera) until the device or switch changes (`restart_live`). Stopped whenever the window is closed. |
 | Recording webcam bubble | `cam_bubble::Feed` | Waiting{until}, Running{live, since} | Retries a failed or frozen feed; waits after the webcam is switched back on. |

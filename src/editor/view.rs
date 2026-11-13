@@ -14,7 +14,7 @@ use super::{icons, spline, stickers, text};
 use crate::ui;
 use gpui_kit::AnimationExt;
 
-use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::color_picker::{ColorPickerEvent, ColorPickerState};
 use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::component::{Disableable, Icon, Selectable, Sizable};
@@ -22,7 +22,7 @@ use gpui_kit::prelude::*;
 use gpui_kit::{
     AnyWindowHandle, App, Bounds, ClickEvent, Entity, FocusHandle, FontWeight, Global, KeyDownEvent, MouseButton,
     MouseDownEvent, MouseMoveEvent, MouseUpEvent, ObjectFit, PinchEvent, Pixels, RenderImage, ScrollDelta, ScrollEvent,
-    Subscription, TitlebarOptions, Window, WindowBounds, WindowOptions, canvas, div, hsla, img, point, px, rgb, size,
+    Subscription, TitlebarOptions, Window, WindowBounds, WindowOptions, canvas, div, img, point, px, rgb, size,
 };
 use image::RgbaImage;
 use std::cell::Cell;
@@ -207,7 +207,7 @@ pub struct CalloutDefaults {
 
 impl CalloutDefaults {
     fn for_image(u: f32) -> Self {
-        let red = [0xff, 0x3b, 0x30, 255];
+        let red = tk::content::ANNOTATION[0];
         Self {
             shape: CalloutShape::Rect,
             scale: 2.0,
@@ -267,7 +267,7 @@ impl Defaults {
     fn for_image(long: u32) -> Self {
         let u = (long as f32 / 1200.0).max(1.0);
         Self {
-            color: [0xff, 0x3b, 0x30, 255],
+            color: tk::content::ANNOTATION[0],
             fill: None,
             width: (4.0 * u).round(),
             radius: (12.0 * u).round(),
@@ -286,7 +286,7 @@ impl Defaults {
             pill: None,
             outline: None,
             shadow: false,
-            hl_color: [0xff, 0xe6, 0x00, 255],
+            hl_color: tk::content::HIGHLIGHT[0],
             hl_free: false,
             hl_width: (22.0 * u).round(),
             redact: RedactMode::Pixelate,
@@ -393,9 +393,15 @@ enum Drag {
 
 struct Toast {
     text: String,
+    /// A second line (the Save confirmation's note about the project file).
+    detail: Option<&'static str>,
+    ok: bool,
     at: Instant,
     reveal: Option<PathBuf>,
 }
+
+/// The Save tooltip and confirmation (replaces the permanent warning banner).
+const SAVE_NOTE: &str = "Saves an editable project that includes the original image.";
 
 const HANDLE: f32 = 9.0;
 /// Room the picture may be panned past its edge, in points (the same as around it at Fit).
@@ -448,19 +454,8 @@ fn resize_cursor(ex: i8, ey: i8) -> gpui_kit::CursorStyle {
 }
 /// Selection and handles: the system's selection blue (distinct from the green accent, and
 /// visible on screenshots full of green).
-const SELECT: u32 = 0x0a84ff;
-const PALETTE: [Rgba; 10] = [
-    [0xff, 0x3b, 0x30, 255],
-    [0xff, 0x9f, 0x0a, 255],
-    [0xff, 0xd6, 0x0a, 255],
-    [0x30, 0xd1, 0x58, 255],
-    [0xa4, 0xf4, 0x7c, 255],
-    [0x0a, 0x84, 0xff, 255],
-    [0xbf, 0x5a, 0xf2, 255],
-    [0xff, 0xff, 0xff, 255],
-    [0x8e, 0x8e, 0x93, 255],
-    [0x00, 0x00, 0x00, 255],
-];
+const SELECT: u32 = tk::SELECTION;
+const PALETTE: [Rgba; 10] = tk::content::ANNOTATION;
 
 pub struct EditorView {
     pub(super) path: PathBuf,
@@ -511,7 +506,73 @@ pub struct EditorView {
     fonts: Vec<String>,
     font_shown: Option<String>,
     pub(super) bg_picker: Entity<crate::bg_picker::BgPicker>,
+    /// The tool pill's open flyout.
+    flyout: Option<Flyout>,
+    /// The shape the Shapes button picks (the last one used).
+    last_shape: Tool,
+    /// The properties panel is hidden.
+    panel_hidden: bool,
+    /// The header's "…" menu or "?" shortcuts popover.
+    header_menu: HeaderMenu,
+    /// "Discard changes" asked; the confirm dialog is up.
+    confirm_discard: bool,
+    /// The editable name in the header (the file name without extension).
+    name_input: Entity<InputState>,
     _subs: Vec<Subscription>,
+}
+
+/// A flyout above the tool pill.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Flyout {
+    Shapes,
+    /// Tool groups that don't fit at this width.
+    More,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum HeaderMenu {
+    None,
+    More,
+    Shortcuts,
+}
+
+/// One button in the tool pill: a tool, or the Shapes flyout.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum PillItem {
+    Tool(Tool),
+    Shapes,
+}
+
+const SHAPES: [Tool; 4] = [Tool::Line, Tool::Rect, Tool::RoundRect, Tool::Ellipse];
+
+/// The tool pill's groups, in order: Select; Draw; Annotate; Protect; Frame.
+const PILL_GROUPS: [&[PillItem]; 5] = [
+    &[PillItem::Tool(Tool::Select)],
+    &[PillItem::Tool(Tool::Arrow), PillItem::Shapes, PillItem::Tool(Tool::Pen), PillItem::Tool(Tool::Highlight)],
+    &[PillItem::Tool(Tool::Text), PillItem::Tool(Tool::Emoji), PillItem::Tool(Tool::Sticker), PillItem::Tool(Tool::Step)],
+    &[PillItem::Tool(Tool::Redact)],
+    &[PillItem::Tool(Tool::Crop), PillItem::Tool(Tool::Background), PillItem::Tool(Tool::Merge), PillItem::Tool(Tool::Callout)],
+];
+
+/// Inner padding of the pill and the gap around its dividers.
+const PILL_PAD: f32 = 6.0;
+const PILL_DIV: f32 = 13.0;
+/// Room kept under the picture for the floating pill.
+const PILL_SPACE: f32 = tk::PILL_H + tk::S4;
+
+/// Width of a pill holding these groups (plus a More button when `more`).
+fn pill_width(groups: usize, more: bool) -> f32 {
+    let buttons: usize = PILL_GROUPS[..groups].iter().map(|g| g.len()).sum::<usize>() + more as usize;
+    let dividers = groups.saturating_sub(1) + more as usize;
+    PILL_PAD * 2.0 + buttons as f32 * tk::TOOL_BTN + dividers as f32 * PILL_DIV
+}
+
+/// How many groups fit in `width`; the rest go into More.
+fn pill_groups_that_fit(width: f32) -> usize {
+    if pill_width(PILL_GROUPS.len(), false) <= width {
+        return PILL_GROUPS.len();
+    }
+    (1..PILL_GROUPS.len()).rev().find(|&n| pill_width(n, true) <= width).unwrap_or(1)
 }
 
 pub fn palette() -> Vec<Rgba> {
@@ -565,7 +626,7 @@ impl RenderState {
     }
 }
 
-struct Open(HashMap<PathBuf, AnyWindowHandle>);
+struct Open(HashMap<PathBuf, (AnyWindowHandle, gpui_kit::WeakEntity<EditorView>)>);
 impl Global for Open {}
 
 /// Merges 2–6 pictures into a new board document (`Merge_<time>` in `folder`, with copies
@@ -602,8 +663,20 @@ fn write_board_preview(doc: &Document, path: &std::path::Path) -> anyhow::Result
 
 /// Opens the editor for a screenshot (or brings its window forward).
 pub fn open(path: PathBuf, cx: &mut App) {
-    if let Some(h) = cx.try_global::<Open>().and_then(|o| o.0.get(&path).copied()) {
+    open_with(path, false, cx)
+}
+
+/// Opens the editor on `path` (or brings its window forward), with the Export popover open
+/// when `export` (the Library card's Export).
+pub fn open_with(path: PathBuf, export: bool, cx: &mut App) {
+    if let Some((h, v)) = cx.try_global::<Open>().and_then(|o| o.0.get(&path).cloned()) {
         if h.update(cx, |_, window, _| window.activate_window()).is_ok() {
+            if export {
+                let _ = v.update(cx, |v, cx| {
+                    v.export_open = true;
+                    cx.notify();
+                });
+            }
             cx.activate(true);
             return;
         }
@@ -616,18 +689,18 @@ pub fn open(path: PathBuf, cx: &mut App) {
         }
     };
     let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("Screenshot").to_string();
-    let bounds = Bounds::centered(None, size(px(1360.), px(860.)), cx);
+    let bounds = Bounds::centered(None, crate::theme::initial_size(), cx);
     let p2 = path.clone();
     let opened = gpui_kit::open_window(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             titlebar: Some(TitlebarOptions {
-                title: Some(format!("Edit — {name}").into()),
+                title: Some(name.clone().into()),
                 appears_transparent: true,
                 traffic_light_position: Some(point(px(18.), px(19.))),
             }),
             is_resizable: true,
-            window_min_size: Some(size(px(980.), px(620.))),
+            window_min_size: Some(size(px(tk::MIN_W), px(tk::MIN_H))),
             ..Default::default()
         },
         cx,
@@ -637,7 +710,10 @@ pub fn open(path: PathBuf, cx: &mut App) {
         if !cx.has_global::<Open>() {
             cx.set_global(Open(HashMap::new()));
         }
-        cx.global_mut::<Open>().0.insert(path.clone(), handle);
+        cx.global_mut::<Open>().0.insert(path.clone(), (handle, view.downgrade()));
+        if export {
+            view.update(cx, |v, _| v.export_open = true);
+        }
         let _ = handle.update(cx, |_, window, cx| {
             let view = view.clone();
             window.on_window_should_close(cx, move |_, cx| {
@@ -733,6 +809,13 @@ impl EditorView {
             }
         }));
 
+        let stem_now = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+        let name_input = cx.new(|cx| InputState::new(window, cx).default_value(stem_now));
+        subs.push(cx.subscribe_in(&name_input, window, |this: &mut Self, _, ev: &InputEvent, window, cx| {
+            if matches!(ev, InputEvent::PressEnter { .. } | InputEvent::Blur) {
+                this.rename(window, cx);
+            }
+        }));
         let focus = cx.focus_handle();
         focus.focus(window, cx);
         let mut v = Self {
@@ -778,6 +861,12 @@ impl EditorView {
             fonts,
             font_shown: None,
             bg_picker,
+            flyout: None,
+            last_shape: Tool::Rect,
+            panel_hidden: false,
+            header_menu: HeaderMenu::None,
+            confirm_discard: false,
+            name_input,
             _subs: subs,
         };
         v.refresh_thumbs();
@@ -885,6 +974,11 @@ impl EditorView {
     }
 
     pub(super) fn set_tool(&mut self, tool: Tool, _window: &mut Window, cx: &mut Context<Self>) {
+        if SHAPES.contains(&tool) {
+            self.last_shape = tool;
+        } else if self.flyout == Some(Flyout::Shapes) {
+            self.flyout = None;
+        }
         self.finish_editing();
         if self.tool == Tool::Crop || tool == Tool::Crop {
             self.zoom = None;
@@ -1513,7 +1607,7 @@ impl EditorView {
         if vw < 10.0 || vh < 10.0 {
             return 0.5;
         }
-        ((vw - 48.0) / out.0 as f32).min((vh - 48.0) / out.1 as f32).max(0.01)
+        ((vw - tk::S6 * 2.0) / out.0 as f32).min((vh - tk::S6 * 2.0 - PILL_SPACE) / out.1 as f32).max(0.01)
     }
 
     fn k(&self, out: (u32, u32)) -> f32 {
@@ -1528,7 +1622,7 @@ impl EditorView {
         let (bx, by, bw, bh) = (f32::from(b.origin.x), f32::from(b.origin.y), f32::from(b.size.width), f32::from(b.size.height));
         let pan = clamp_pan(self.pan, k, lay.canvas, (bw, bh));
         let ox = bx + (bw - lay.canvas.0 as f32 * k) / 2.0 + pan.0;
-        let oy = by + (bh - lay.canvas.1 as f32 * k) / 2.0 + pan.1;
+        let oy = by + (bh - PILL_SPACE - lay.canvas.1 as f32 * k) / 2.0 + pan.1;
         Map { ox, oy, k, crop: d.crop, content: lay.content, lscale: lay.scale }
     }
 
@@ -1591,11 +1685,10 @@ impl EditorView {
         cx.spawn(async move |this, cx| {
             let img = task.await;
             let _ = this.update(cx, |v, cx| {
-                let msg = match super::copy_image(&img, cx) {
-                    Ok(()) => "Copied to the clipboard".to_string(),
-                    Err(e) => format!("Copy failed: {e}"),
-                };
-                v.toast(msg, None, cx);
+                match super::copy_image(&img, cx) {
+                    Ok(()) => v.toast("Copied".to_string(), None, cx),
+                    Err(e) => v.toast_error(format!("Couldn't copy: {e}. Try Export instead."), cx),
+                }
             });
         })
         .detach();
@@ -1609,7 +1702,7 @@ impl EditorView {
     pub(super) fn save(&mut self, cx: &mut Context<Self>) {
         let dir = self.path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
         let dest = export::output_path(&dir, &self.stem(), &crate::recorder::stamp(), self.export.format);
-        self.write_export(dest, cx);
+        self.write_export(dest, true, cx);
     }
 
     /// Asks where to save, then writes the export there.
@@ -1620,14 +1713,14 @@ impl EditorView {
         let rx = cx.prompt_for_new_path(&dir, Some(&name));
         cx.spawn(async move |this, cx| {
             if let Ok(Ok(Some(dest))) = rx.await {
-                let _ = this.update(cx, |v, cx| v.write_export(dest, cx));
+                let _ = this.update(cx, |v, cx| v.write_export(dest, false, cx));
             }
         })
         .detach();
         self.export_open = false;
     }
 
-    fn write_export(&mut self, dest: PathBuf, cx: &mut Context<Self>) {
+    fn write_export(&mut self, dest: PathBuf, save: bool, cx: &mut Context<Self>) {
         self.save_project();
         let settings = self.export;
         let render = self.render_export(settings.scale.clamp(1, 2) as f32);
@@ -1642,17 +1735,71 @@ impl EditorView {
             let _ = this.update(cx, |v, cx| match result {
                 Ok(dest) => {
                     let name = dest.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
-                    v.toast(format!("Saved {name}"), Some(dest), cx);
+                    v.toast(format!("{} {name}", if save { "Saved" } else { "Exported" }), Some(dest), cx);
+                    if save && let Some(t) = &mut v.toast {
+                        t.detail = Some(SAVE_NOTE);
+                    }
                 }
-                Err(e) => v.toast(format!("Export failed: {e}"), None, cx),
+                Err(e) => v.toast_error(format!("Couldn't {}: {e}. Check that the folder can be written to.", if save { "save" } else { "export" }), cx),
             });
         })
         .detach();
     }
 
     fn toast(&mut self, text: String, reveal: Option<PathBuf>, cx: &mut Context<Self>) {
-        self.toast = Some(Toast { text, at: Instant::now(), reveal });
+        self.toast = Some(Toast { text, detail: None, ok: true, at: Instant::now(), reveal });
         cx.notify();
+    }
+
+    fn toast_error(&mut self, text: String, cx: &mut Context<Self>) {
+        self.toast = Some(Toast { text, detail: None, ok: false, at: Instant::now(), reveal: None });
+        cx.notify();
+    }
+
+    /// The header's name was edited: rename the file and its project file.
+    fn rename(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let name = self.name_input.read(cx).value().trim().to_string();
+        if name.is_empty() || name == self.stem() {
+            return;
+        }
+        self.save_project();
+        match crate::home::rename_item(&self.path, &name) {
+            Ok(new) => {
+                if cx.has_global::<Open>() {
+                    let open = &mut cx.global_mut::<Open>().0;
+                    if let Some(h) = open.remove(&self.path) {
+                        open.insert(new.clone(), h);
+                    }
+                }
+                self.path = new;
+                window.set_window_title(&self.path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string());
+                self.toast("Renamed".into(), None, cx);
+            }
+            Err(e) => {
+                let stem = self.stem();
+                self.name_input.update(cx, |s, cx| s.set_value(stem, window, cx));
+                self.toast_error(e.to_string(), cx);
+            }
+        }
+    }
+
+    /// Back to the Library: saves, closes this window and brings the main window forward.
+    fn back_to_library(&mut self, window: &mut Window, _cx: &mut Context<Self>) {
+        self.save_project();
+        crate::menubar::request(crate::menubar::Action::Open);
+        window.remove_window();
+    }
+
+    /// Discard changes (after the confirm dialog): back to the original image. Undoable.
+    fn discard_changes(&mut self, cx: &mut Context<Self>) {
+        self.checkpoint();
+        let name = self.path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+        self.doc = Document::new(&name, self.base.dimensions());
+        self.sel = None;
+        self.editing = None;
+        self.tool = Tool::Select;
+        self.changed(cx);
+        self.toast("Changes discarded. Undo brings them back.".into(), None, cx);
     }
 
     // ---------- canvas input ----------
@@ -2560,6 +2707,10 @@ impl EditorView {
                 self.export_open = !self.export_open;
                 cx.notify();
             }
+            (true, ".") => {
+                self.panel_hidden = !self.panel_hidden;
+                cx.notify();
+            }
             (true, "0") => self.zoom_fit(cx),
             (true, "1") => self.zoom_actual(window, cx),
             (true, "=") | (true, "+") => self.zoom_by(1.25, None, cx),
@@ -2638,98 +2789,287 @@ impl EditorView {
 
     // ---------- view ----------
 
+    /// The editor header, the same structure as the video editor's: back to the Library,
+    /// the editable name, undo/redo and zoom; then shortcuts, the panel toggle, the "…" menu,
+    /// Copy, Save and the coral Export.
     fn top_bar(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
         let k = self.k(self.display_doc().layout().canvas);
         let pct = (k * window.scale_factor() * 100.0).round();
-        let icon_btn = |id: &'static str, icon: Icon, tip: &'static str| Button::new(id).cursor_pointer().ghost().small().icon(icon).tooltip(tip);
-        // Related controls share a pill-shaped group.
-        let group = || div().flex().items_center().gap(px(2.)).p(px(3.)).rounded_full().bg(rgb(tk::raised())).border_1().border_color(ui::hairline());
+        let menu_btn = |id: &'static str, icon: Icon, tip: &'static str, which: HeaderMenu, cx: &mut Context<Self>| {
+            ui::icon_button(id, icon, tip).on_click(cx.listener(move |v, _: &ClickEvent, _, cx| {
+                v.header_menu = if v.header_menu == which { HeaderMenu::None } else { which };
+                cx.notify();
+            }))
+        };
         div()
-            .h(px(56.))
+            .h(px(tk::HEADER_H))
             .flex_none()
             .flex()
             .items_center()
             .gap(px(ui::S2))
-            .pl(px(88.))
+            .pl(px(tk::TRAFFIC_INSET))
             .pr(px(ui::S4))
-            .border_b_1()
-            .border_color(ui::hairline())
-            .child(
-                group()
-                    .child(icon_btn("undo", icons::undo(), "Undo  ⌘Z").rounded_full().disabled(!self.history.can_undo()).on_click(cx.listener(|v, _: &ClickEvent, w, cx| v.undo(w, cx))))
-                    .child(icon_btn("redo", icons::redo(), "Redo  ⇧⌘Z").rounded_full().disabled(!self.history.can_redo()).on_click(cx.listener(|v, _: &ClickEvent, w, cx| v.redo(w, cx)))),
-            )
-            .child(
-                group()
-                    .child(icon_btn("zoom-out", icons::zoom_out(), "Zoom out  ⌘−").rounded_full().on_click(cx.listener(|v, _: &ClickEvent, _, cx| v.zoom_by(0.8, None, cx))))
-                    .child(div().w(px(48.)).text_center().text_sm().font_weight(FontWeight::MEDIUM).text_color(rgb(tk::text())).child(format!("{pct}%")))
-                    .child(icon_btn("zoom-in", icons::zoom_in(), "Zoom in  ⌘=").rounded_full().on_click(cx.listener(|v, _: &ClickEvent, _, cx| v.zoom_by(1.25, None, cx))))
-                    .child(div().w(px(1.)).h(px(16.)).mx(px(2.)).bg(ui::hairline_strong()))
-                    .child(Button::new("fit").cursor_pointer().ghost().small().rounded_full().label("Fit").tooltip("Fit  ⌘0").selected(self.zoom.is_none()).on_click(cx.listener(|v, _: &ClickEvent, _, cx| v.zoom_fit(cx))))
-                    .child(Button::new("actual").cursor_pointer().ghost().small().rounded_full().label("100%").tooltip("Actual size  ⌘1").on_click(cx.listener(|v, _: &ClickEvent, w, cx| v.zoom_actual(w, cx)))),
-            )
-            .child(div().flex_1())
+            .child(ui::icon_button("back", icons::back_arrow(), "Back to the Library").on_click(cx.listener(|v, _: &ClickEvent, w, cx| v.back_to_library(w, cx))))
             .child(
                 div()
-                    .id("project-note")
-                    .flex()
-                    .items_center()
-                    .gap(px(6.))
-                    .mr(px(ui::S2))
-                    .text_xs()
-                    .text_color(rgb(tk::muted()))
-                    .child(icons::lock().xsmall())
-                    .child("Project file keeps the original. Do not share it.")
-                    .tooltip(|w, cx| {
-                        gpui_kit::component::tooltip::Tooltip::new("Edits autosave to a .clipper.json project next to the screenshot. Copy, Save and Export always bake redactions in, so exports are safe to share.").build(w, cx)
-                    }),
+                    .w(px(220.))
+                    .flex_none()
+                    .child(gpui_kit::component::input::Input::new(&self.name_input).appearance(false).text_size(px(tk::T15)).font_weight(FontWeight::BOLD)),
             )
-            .child(Button::new("copy").cursor_pointer().ghost().small().rounded_full().icon(icons::copy()).label("Copy").tooltip("Copy image  ⌘C").on_click(cx.listener(|v, _: &ClickEvent, _, cx| v.copy(cx))))
-            .child(Button::new("save").cursor_pointer().ghost().small().rounded_full().icon(icons::save()).label("Save").tooltip("Save next to the original  ⌘S").on_click(cx.listener(|v, _: &ClickEvent, _, cx| v.save(cx))))
-            .child(Button::new("export").cursor_pointer().primary().small().rounded_full().px(px(ui::S4)).icon(icons::export()).label("Export").tooltip("Export…  ⌘E").on_click(cx.listener(|v, _: &ClickEvent, _, cx| {
+            .child(ui::vdivider(20.))
+            .child(ui::icon_button("undo", icons::undo(), "Undo  ⌘Z").disabled(!self.history.can_undo()).on_click(cx.listener(|v, _: &ClickEvent, w, cx| v.undo(w, cx))))
+            .child(ui::icon_button("redo", icons::redo(), "Redo  ⇧⌘Z").disabled(!self.history.can_redo()).on_click(cx.listener(|v, _: &ClickEvent, w, cx| v.redo(w, cx))))
+            .child(ui::vdivider(20.))
+            .child(ui::icon_button("zoom-out", icons::zoom_out(), "Zoom out  ⌘−").on_click(cx.listener(|v, _: &ClickEvent, _, cx| v.zoom_by(0.8, None, cx))))
+            .child(ui::timecode(format!("{pct}%")).w(px(48.)).text_center().text_size(px(tk::T13)).font_weight(FontWeight::SEMIBOLD))
+            .child(ui::icon_button("zoom-in", icons::zoom_in(), "Zoom in  ⌘=").on_click(cx.listener(|v, _: &ClickEvent, _, cx| v.zoom_by(1.25, None, cx))))
+            .child(ui::ghost_button("fit").label("Fit").tooltip("Fit  ⌘0").on_click(cx.listener(|v, _: &ClickEvent, _, cx| v.zoom_fit(cx))))
+            .child(ui::ghost_button("actual").label("100%").tooltip("Actual size  ⌘1").on_click(cx.listener(|v, _: &ClickEvent, w, cx| v.zoom_actual(w, cx))))
+            .child(div().flex_1())
+            .child(menu_btn("shortcuts", icons::help(), "Keyboard shortcuts", HeaderMenu::Shortcuts, cx))
+            .child(ui::icon_button("panel-toggle", icons::panel_right(), if self.panel_hidden { "Show the panel  ⌘." } else { "Hide the panel  ⌘." }).on_click(cx.listener(|v, _: &ClickEvent, _, cx| {
+                v.panel_hidden = !v.panel_hidden;
+                cx.notify();
+            })))
+            .child(menu_btn("more", icons::more(), "More", HeaderMenu::More, cx))
+            .child(ui::secondary_button("copy").icon(icons::copy()).label("Copy").tooltip("Copy the image  ⌘C").on_click(cx.listener(|v, _: &ClickEvent, _, cx| v.copy(cx))))
+            .child(ui::secondary_button("save").icon(icons::save()).label("Save").tooltip(SAVE_NOTE).on_click(cx.listener(|v, _: &ClickEvent, _, cx| v.save(cx))))
+            .child(ui::coral_button("export").icon(icons::export()).label("Export").tooltip("Export  ⌘E").on_click(cx.listener(|v, _: &ClickEvent, _, cx| {
                 v.export_open = !v.export_open;
+                v.header_menu = HeaderMenu::None;
                 cx.notify();
             })))
     }
 
-    fn toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let mut col = div().w_full().flex().flex_col().items_center().gap(px(1.)).py(px(6.));
-        for (i, tool) in Tool::ALL.into_iter().enumerate() {
-            if matches!(tool, Tool::Text | Tool::Emoji | Tool::Redact) {
-                col = col.child(div().w(px(32.)).h(px(1.)).my(px(3.)).bg(ui::hairline()));
+    /// The header's popovers and the discard confirmation.
+    fn header_overlays(&self, cx: &mut Context<Self>) -> Option<gpui_kit::Div> {
+        if self.confirm_discard {
+            return Some(ui::dialog(
+                "Discard changes?",
+                "Every edit goes, and you're back to the original image. Undo brings them back.",
+                vec![
+                    ui::ghost_button("discard-no").label("Cancel").on_click(cx.listener(|v, _: &ClickEvent, _, cx| {
+                        v.confirm_discard = false;
+                        cx.notify();
+                    })),
+                    ui::primary_button("discard-yes").label("Discard changes").on_click(cx.listener(|v, _: &ClickEvent, _, cx| {
+                        v.confirm_discard = false;
+                        v.discard_changes(cx);
+                    })),
+                ],
+                Box::new(cx.listener(|v, _: &ClickEvent, _, cx| {
+                    v.confirm_discard = false;
+                    cx.notify();
+                })),
+            ));
+        }
+        let pop = match self.header_menu {
+            HeaderMenu::None => return None,
+            HeaderMenu::More => {
+                let path = self.path.clone();
+                let board = self.doc.board.is_some();
+                ui::menu(220.)
+                    .child(
+                        ui::menu_item("m-discard", Some(icons::rotate_left()), "Discard changes")
+                            .when(board, |d| d.opacity(0.5).cursor_default().tooltip(|w, cx| gpui_kit::component::tooltip::Tooltip::new("A merged picture has no original to go back to").build(w, cx)))
+                            .on_click(cx.listener(move |v, _: &ClickEvent, _, cx| {
+                                if board {
+                                    return;
+                                }
+                                v.header_menu = HeaderMenu::None;
+                                v.confirm_discard = true;
+                                cx.notify();
+                            })),
+                    )
+                    .child(ui::menu_item("m-folder", Some(icons::folder()), "Show in folder").on_click(cx.listener(move |v, _: &ClickEvent, _, cx| {
+                        v.header_menu = HeaderMenu::None;
+                        cx.reveal_path(&path);
+                        cx.notify();
+                    })))
             }
-            let on = self.tool == tool;
-            let tip = format!("{}  {}", tool.label(), tool.key().to_uppercase());
-            // The current tool: accent tint and accent icon (not only a shade change).
-            col = col.child(
-                div()
-                    .id(("tool", i))
-                    .w(px(64.))
-                    .py(px(4.))
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .gap(px(2.))
-                    .rounded(px(12.))
-                    .cursor_pointer()
-                    .when(on, |d| d.bg(ui::accent_tint()).text_color(rgb(tk::green_ink())))
-                    .when(!on, |d| d.text_color(rgb(tk::muted())).hover(|d| d.bg(rgb(tk::raised())).text_color(rgb(tk::text()))))
-                    .child(tool.icon().size(px(20.)))
-                    .child(div().text_size(px(10.)).font_weight(FontWeight::MEDIUM).child(tool.short()))
-                    .tooltip(move |w, cx| gpui_kit::component::tooltip::Tooltip::new(tip.clone()).build(w, cx))
-                    .on_click(cx.listener(move |v, _: &ClickEvent, w, cx| v.set_tool(tool, w, cx))),
+            HeaderMenu::Shortcuts => {
+                let mut col = ui::popover().w(px(320.)).p(px(ui::S4)).flex().flex_col().gap(px(ui::S2)).child(ui::heading("Keyboard shortcuts"));
+                for t in Tool::ALL {
+                    col = col.child(ui::shortcut(t.label(), t.key().to_uppercase()));
+                }
+                col.child(div().h(px(ui::S2)))
+                    .child(ui::shortcut("Keep proportions", "⇧ drag"))
+                    .child(ui::shortcut("Nudge", "← → ↑ ↓"))
+                    .child(ui::shortcut("Resize by keyboard", "⌥ ← → ↑ ↓"))
+                    .child(ui::shortcut("Duplicate", "⌘D"))
+                    .child(ui::shortcut("Bring forward or back", "⌘] ⌘["))
+                    .child(ui::shortcut("Lock", "⌘L"))
+                    .child(ui::shortcut("Pan", "Space drag"))
+                    .child(ui::shortcut("Zoom", "Scroll or pinch"))
+                    .child(ui::shortcut("Fit or 100%", "⌘0 ⌘1"))
+                    .child(ui::shortcut("Copy, save, export", "⌘C ⌘S ⌘E"))
+                    .child(ui::shortcut("Show or hide the panel", "⌘."))
+            }
+        };
+        Some(
+            div()
+                .absolute()
+                .inset_0()
+                .child(div().id("hm-dismiss").absolute().inset_0().on_click(cx.listener(|v, _: &ClickEvent, _, cx| {
+                    v.header_menu = HeaderMenu::None;
+                    cx.notify();
+                })))
+                .child(
+                    div()
+                        .id("hm-pop")
+                        .absolute()
+                        .top(px(tk::HEADER_H - 4.0))
+                        .right(px(ui::S4))
+                        .max_h(px(560.))
+                        .overflow_y_scroll()
+                        .occlude()
+                        .child(pop.with_animation("hm-pop-in", ui::enter(), |el, t| el.opacity(t))),
+                ),
+        )
+    }
+
+    fn pill_button(&self, item: PillItem, cx: &mut Context<Self>) -> gpui_kit::Stateful<gpui_kit::Div> {
+        let (icon, on, tip, id) = match item {
+            PillItem::Tool(t) => (t.icon(), self.tool == t, format!("{}  {}", t.label(), t.key().to_uppercase()), format!("tool-{}", t.key())),
+            PillItem::Shapes => (
+                self.last_shape.icon(),
+                SHAPES.contains(&self.tool),
+                "Shapes: line, rectangle, rounded, ellipse".to_string(),
+                "tool-shapes".to_string(),
+            ),
+        };
+        ui::focusable(
+            div()
+                .id(gpui_kit::ElementId::Name(id.into()))
+                .size(px(tk::TOOL_BTN))
+                .flex()
+                .flex_none()
+                .items_center()
+                .justify_center()
+                .rounded_full()
+                .cursor_pointer()
+                .when(on, |d| d.bg(rgb(tk::selected())).text_color(rgb(tk::on_selected())))
+                .when(!on, |d| d.text_color(rgb(tk::text())).hover(|d| d.bg(rgb(tk::mist())))),
+        )
+        .child(icon.size(px(tk::ICON)))
+        .tooltip(move |w, cx| gpui_kit::component::tooltip::Tooltip::new(tip.clone()).build(w, cx))
+        .on_click(cx.listener(move |v, _: &ClickEvent, w, cx| match item {
+            PillItem::Tool(t) => {
+                v.flyout = None;
+                v.set_tool(t, w, cx);
+            }
+            PillItem::Shapes => {
+                let open = v.flyout == Some(Flyout::Shapes);
+                if !SHAPES.contains(&v.tool) {
+                    v.set_tool(v.last_shape, w, cx);
+                }
+                v.flyout = if open { None } else { Some(Flyout::Shapes) };
+                cx.notify();
+            }
+        }))
+    }
+
+    /// The floating tool pill, centered at the bottom of the stage. Groups that don't fit
+    /// the stage's width move into a More flyout, so every tool stays reachable.
+    fn tool_pill(&self, stage_w: f32, cx: &mut Context<Self>) -> impl IntoElement {
+        let fit = pill_groups_that_fit(stage_w - ui::S4 * 2.0);
+        let more = fit < PILL_GROUPS.len();
+        let divider = || div().w(px(1.)).h(px(24.)).mx(px((PILL_DIV - 1.0) / 2.0)).flex_none().bg(ui::hairline());
+        let mut row = div().flex().items_center();
+        let mut x = PILL_PAD;
+        let mut shapes_x = None;
+        for (g, group) in PILL_GROUPS[..fit].iter().enumerate() {
+            if g > 0 {
+                row = row.child(divider());
+                x += PILL_DIV;
+            }
+            for &item in group.iter() {
+                if item == PillItem::Shapes {
+                    shapes_x = Some(x);
+                }
+                row = row.child(self.pill_button(item, cx));
+                x += tk::TOOL_BTN;
+            }
+        }
+        let more_x = x + PILL_DIV;
+        if more {
+            let on = PILL_GROUPS[fit..].iter().flat_map(|g| g.iter()).any(|i| match i {
+                PillItem::Tool(t) => *t == self.tool,
+                PillItem::Shapes => SHAPES.contains(&self.tool),
+            });
+            row = row.child(divider()).child(
+                ui::focusable(
+                    div()
+                        .id("tool-more")
+                        .size(px(tk::TOOL_BTN))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded_full()
+                        .cursor_pointer()
+                        .when(on, |d| d.bg(rgb(tk::selected())).text_color(rgb(tk::on_selected())))
+                        .when(!on, |d| d.hover(|d| d.bg(rgb(tk::mist())))),
+                )
+                .child(icons::more().size(px(tk::ICON)))
+                .tooltip(|w, cx| gpui_kit::component::tooltip::Tooltip::new("More tools").build(w, cx))
+                .on_click(cx.listener(|v, _: &ClickEvent, _, cx| {
+                    v.flyout = if v.flyout == Some(Flyout::More) { None } else { Some(Flyout::More) };
+                    cx.notify();
+                })),
             );
         }
-        // Scrolls when the window is shorter than the labelled tools.
+        let width = pill_width(fit, more);
+        // The open flyout, a smaller pill right above its button.
+        let flyout = self.flyout.and_then(|f| {
+            let (items, at): (Vec<PillItem>, f32) = match f {
+                Flyout::Shapes => (SHAPES.iter().map(|&t| PillItem::Tool(t)).collect(), shapes_x.or_else(|| more.then_some(more_x))?),
+                Flyout::More => (PILL_GROUPS[fit..].iter().flat_map(|g| g.iter().copied()).collect(), more.then_some(more_x)?),
+            };
+            let w = PILL_PAD * 2.0 + items.len() as f32 * tk::TOOL_BTN;
+            let left = (at + tk::TOOL_BTN / 2.0 - w / 2.0).clamp(-(stage_w - width) / 2.0 + ui::S2, width - w + (stage_w - width) / 2.0 - ui::S2);
+            let mut fr = div().flex().items_center();
+            for it in items {
+                fr = fr.child(self.pill_button(it, cx));
+            }
+            Some(
+                div()
+                    .absolute()
+                    .bottom(px(tk::PILL_H + ui::S2))
+                    .left(px(left))
+                    .p(px(PILL_PAD))
+                    .rounded_full()
+                    .bg(rgb(tk::paper()))
+                    .border_1()
+                    .border_color(ui::hairline())
+                    .shadow(ui::float_shadow())
+                    .occlude()
+                    .child(fr)
+                    .with_animation(gpui_kit::ElementId::Name(format!("flyout-{f:?}").into()), ui::enter(), |el, t| el.opacity(t)),
+            )
+        });
         div()
-            .id("toolbar")
-            .w(px(76.))
-            .flex_none()
-            .h_full()
-            .border_r_1()
-            .border_color(ui::hairline())
-            .overflow_y_scroll()
-            .child(col)
+            .absolute()
+            .bottom(px(ui::S4))
+            .left_0()
+            .right_0()
+            .flex()
+            .justify_center()
+            .child(
+                div()
+                    .relative()
+                    .h(px(tk::PILL_H))
+                    .px(px(PILL_PAD))
+                    .flex()
+                    .items_center()
+                    .rounded_full()
+                    .bg(rgb(tk::paper()))
+                    .border_1()
+                    .border_color(ui::hairline())
+                    .shadow(ui::float_shadow())
+                    .occlude()
+                    .child(row)
+                    .children(flyout),
+            )
     }
 
     fn overlay(&self, map: &Map) -> Vec<gpui_kit::AnyElement> {
@@ -2744,12 +3084,12 @@ impl EditorView {
             let tl = rel(map.to_screen(p(c.x, c.y)));
             let br = rel(map.to_screen(p(c.right(), c.bottom())));
             let (bw, bh) = (f32::from(b.size.width), f32::from(b.size.height));
-            let dim = hsla(0., 0., 0., 0.55);
+            let dim = tk::scrim(0.55);
             for (x, y, w, h) in [(0.0, 0.0, bw, tl.y), (0.0, br.y, bw, bh - br.y), (0.0, tl.y, tl.x, br.y - tl.y), (br.x, tl.y, bw - br.x, br.y - tl.y)] {
                 out.push(div().absolute().left(px(x)).top(px(y)).w(px(w.max(0.0))).h(px(h.max(0.0))).bg(dim).into_any_element());
             }
             out.push(
-                div().absolute().left(px(tl.x)).top(px(tl.y)).w(px(br.x - tl.x)).h(px(br.y - tl.y)).border_2().border_color(rgb(tk::green())).into_any_element(),
+                div().absolute().left(px(tl.x)).top(px(tl.y)).w(px(br.x - tl.x)).h(px(br.y - tl.y)).border_2().border_color(rgb(tk::selected())).into_any_element(),
             );
             for (ex, ey) in [(-1i8, -1i8), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0)] {
                 let hx = tl.x + (ex as f32 + 1.0) / 2.0 * (br.x - tl.x);
@@ -2764,10 +3104,10 @@ impl EditorView {
                     .px_2()
                     .py_1()
                     .rounded(px(6.))
-                    .bg(rgb(tk::green()))
-                    .text_xs()
+                    .bg(rgb(tk::selected()))
+                    .text_size(px(tk::T12))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(rgb(tk::on_green()))
+                    .text_color(rgb(tk::on_selected()))
                     .child(format!("{} × {}", c.w.round(), c.h.round()))
                     .into_any_element(),
             );
@@ -2779,12 +3119,12 @@ impl EditorView {
         for x in &self.guides.0 {
             let a = rel(map.to_screen(p(*x, c.y)));
             let z = rel(map.to_screen(p(*x, c.bottom())));
-            out.push(line(a.x, a.y, 1.0, z.y - a.y, 0xff2d92));
+            out.push(line(a.x, a.y, 1.0, z.y - a.y, tk::GUIDE));
         }
         for y in &self.guides.1 {
             let a = rel(map.to_screen(p(c.x, *y)));
             let z = rel(map.to_screen(p(c.right(), *y)));
-            out.push(line(a.x, a.y, z.x - a.x, 1.0, 0xff2d92));
+            out.push(line(a.x, a.y, z.x - a.x, 1.0, tk::GUIDE));
         }
 
         // Images shown larger than their pixels.
@@ -2801,10 +3141,10 @@ impl EditorView {
                                 .px_2()
                                 .py(px(2.))
                                 .rounded_full()
-                                .bg(hsla(0.11, 0.9, 0.12, 0.85))
-                                .text_size(px(11.))
+                                .bg(tk::alpha(tk::DARK.warning_bg, 0.9))
+                                .text_size(px(tk::T12))
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(rgb(tk::DARK.warn))
+                                .text_color(rgb(tk::DARK.warning_text))
                                 .child("Low resolution")
                                 .into_any_element(),
                         );
@@ -2818,9 +3158,9 @@ impl EditorView {
                 let b = t.outer_bounds();
                 let tl = rel(map.to_screen(p(b.x, b.y)));
                 let br = rel(map.to_screen(p(b.right(), b.bottom())));
-                out.push(div().absolute().left(px(tl.x - 3.0)).top(px(tl.y - 3.0)).w(px(br.x - tl.x + 6.0)).h(px(br.y - tl.y + 6.0)).rounded(px(4.)).border_2().border_dashed().border_color(rgb(tk::green())).into_any_element());
+                out.push(div().absolute().left(px(tl.x - 3.0)).top(px(tl.y - 3.0)).w(px(br.x - tl.x + 6.0)).h(px(br.y - tl.y + 6.0)).rounded(px(4.)).border_2().border_dashed().border_color(rgb(tk::selected())).into_any_element());
                 let q = rel(map.to_screen(at));
-                out.push(div().absolute().left(px(q.x - 7.0)).top(px(q.y - 7.0)).size(px(14.)).rounded_full().bg(rgb(tk::green())).border_2().border_color(rgb(0xffffff)).into_any_element());
+                out.push(div().absolute().left(px(q.x - 7.0)).top(px(q.y - 7.0)).size(px(14.)).rounded_full().bg(rgb(tk::selected())).border_2().border_color(rgb(tk::WHITE)).into_any_element());
             }
         }
 
@@ -2838,7 +3178,7 @@ impl EditorView {
                     .h(px(br.y - tl.y + 4.0))
                     .border_1()
                     .when(editing, |d| d.border_dashed())
-                    .border_color(rgb(if o.locked { tk::muted() } else { SELECT }))
+                    .border_color(rgb(if o.locked { tk::ink_soft() } else { SELECT }))
                     .into_any_element(),
             );
             if o.locked {
@@ -2920,7 +3260,7 @@ impl EditorView {
                             .top(px(q.y - 6.0))
                             .size(px(12.))
                             .rounded(px(3.))
-                            .bg(rgb(if on { tk::green() } else { 0xffffff }))
+                            .bg(rgb(if on { tk::selected() } else { tk::WHITE }))
                             .border_2()
                             .border_color(rgb(SELECT))
                             .into_any_element()
@@ -2933,7 +3273,7 @@ impl EditorView {
                         .rounded_full()
                         .bg(rgb(SELECT))
                         .border_2()
-                        .border_color(rgb(0xffffff))
+                        .border_color(rgb(tk::WHITE))
                         .into_any_element(),
                     Handle::Rotate => div()
                         .absolute()
@@ -2943,7 +3283,7 @@ impl EditorView {
                         .rounded_full()
                         .bg(rgb(SELECT))
                         .border_2()
-                        .border_color(rgb(0xffffff))
+                        .border_color(rgb(tk::WHITE))
                         .into_any_element(),
                     _ => handle_dot(q.x, q.y, false),
                 });
@@ -2986,7 +3326,7 @@ impl EditorView {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .child(div().text_base().font_weight(FontWeight::SEMIBOLD).text_color(rgb(tk::text())).child("Export"))
+                    .child(div().text_size(px(tk::T15)).font_weight(FontWeight::BOLD).text_color(rgb(tk::text())).child("Export"))
                     .child(ui::kbd("⌘E")),
             )
             .child(ui::field("Format", None, ui::segmented("format", formats)))
@@ -2994,16 +3334,16 @@ impl EditorView {
                 d.child(self.slider_el(Prop::Quality, "Quality", cx))
             })
             .child(ui::field("Scale", Some(format!("{} × {} px", w * k, h * k)), ui::segmented("scale", scales)))
-            .child(ui::hint("Metadata stripped. Redactions are baked in, so the file is safe to share."))
-            .child(Button::new("export-go").cursor_pointer().primary().rounded_full().w_full().icon(icons::export()).label("Export…").on_click(cx.listener(|v, _: &ClickEvent, _, cx| v.export_as(cx))));
+            .child(ui::hint("Redactions are baked in and metadata is removed, so the file is safe to share."))
+            .child(ui::coral_button("export-go").w_full().icon(icons::export()).label("Export").on_click(cx.listener(|v, _: &ClickEvent, _, cx| v.export_as(cx))));
         div()
             .absolute()
-            .top(px(60.))
-            .right(px(ui::S3))
+            .top(px(tk::HEADER_H - 4.0))
+            .right(px(ui::S4))
             .w(px(312.))
             .occlude()
             .child(ui::bezel(ui::R_LG + 4.0, 5.0, body))
-            .with_animation("export-menu", gpui_kit::Animation::new(ui::ENTER).with_easing(ui::ease_out), |el, t| el.opacity(t).mt(px((1.0 - t) * -6.0)))
+            .with_animation("export-menu", ui::enter(), |el, t| el.opacity(t))
     }
 }
 
@@ -3014,9 +3354,9 @@ fn handle_dot(x: f32, y: f32, green: bool) -> gpui_kit::AnyElement {
         .top(px(y - 5.0))
         .size(px(10.))
         .rounded(px(3.))
-        .bg(rgb(0xffffff))
+        .bg(rgb(tk::WHITE))
         .border_2()
-        .border_color(rgb(if green { tk::green() } else { SELECT }))
+        .border_color(rgb(if green { tk::selected() } else { SELECT }))
         .into_any_element()
 }
 
@@ -3089,10 +3429,9 @@ impl Render for EditorView {
         };
         let canvas_el = div()
             .id("canvas")
-            .flex_1()
-            .relative()
+            .absolute()
+            .inset_0()
             .overflow_hidden()
-            .bg(rgb(tk::bg()))
             .cursor(cursor_style)
             .child(canvas(move |b, _, _| store.set(b), |_, _, _, _| {}).absolute().size_full())
             .children(self.image.clone().map(|image| {
@@ -3135,38 +3474,41 @@ impl Render for EditorView {
                 v.zoom_by((1.0 + ev.delta).clamp(0.5, 2.0), Some(at), cx);
             }))
             // Drop pictures to merge them in.
-            .drag_over::<gpui_kit::ExternalPaths>(|d, _, _, _| d.border_2().border_color(rgb(tk::green_ink())))
+            .drag_over::<gpui_kit::ExternalPaths>(|d, _, _, _| d.border_2().border_color(rgb(tk::selected())))
             .on_drop(cx.listener(|v, paths: &gpui_kit::ExternalPaths, _, cx| v.add_images(paths.paths().to_vec(), cx)));
 
         let toast = self.toast.as_ref().map(|t| {
             let reveal = t.reveal.clone();
-            let ok = !t.text.contains("failed");
             let id = gpui_kit::ElementId::Name(format!("toast-{:?}", t.at).into());
-            div()
-                .absolute()
-                .bottom(px(ui::S6))
-                .left_0()
-                .right_0()
-                .flex()
-                .justify_center()
-                .child(
-                    ui::toast_pill()
-                        .child(div().size(px(8.)).rounded_full().bg(rgb(if ok { tk::green() } else { tk::red() })))
-                        .child(t.text.clone())
-                        .children(reveal.map(|path| {
-                            Button::new("reveal").cursor_pointer().ghost().xsmall().rounded_full().text_color(rgb(tk::green_ink())).label("Show in Finder").on_click(move |_: &ClickEvent, _, cx| cx.reveal_path(&path))
-                        }))
-                        .when(self.toast.as_ref().is_some_and(|t| t.reveal.is_none()), |d| d.pr(px(ui::S4)))
-                        .with_animation(id, gpui_kit::Animation::new(ui::ENTER).with_easing(ui::ease_out), |el, t| el.opacity(t).mb(px((1.0 - t) * -8.0))),
-                )
+            let pill = ui::toast_pill()
+                .when(t.detail.is_some(), |d| d.h_auto().py(px(ui::S2)).rounded(px(tk::R_PANEL)))
+                .child(div().size(px(8.)).flex_none().rounded_full().bg(rgb(if t.ok { tk::success() } else { tk::error() })))
+                .child(div().flex().flex_col().child(t.text.clone()).children(t.detail.map(|d| div().text_size(px(tk::T12)).text_color(rgb(tk::ink_soft())).child(d))))
+                .children(reveal.map(|path| ui::ghost_button("reveal").label("Show in folder").on_click(move |_: &ClickEvent, _, cx| cx.reveal_path(&path))))
+                .when(t.reveal.is_none(), |d| d.pr(px(ui::S4)));
+            div().absolute().top(px(ui::S4)).left_0().right_0().flex().justify_center().child(
+                pill.with_animation(id, gpui_kit::Animation::new(tk::motion(tk::TOAST_MS)).with_easing(ui::ease_out), |el, t| el.opacity(t)),
+            )
         });
+        let stage_w = f32::from(b.size.width).max(1.0);
+        let stage = div()
+            .relative()
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .rounded(px(tk::R_STAGE))
+            .bg(rgb(tk::mist()))
+            .overflow_hidden()
+            .child(canvas_el)
+            .child(self.tool_pill(stage_w, cx))
+            .children(toast);
 
         div()
             .id("editor")
             .size_full()
             .flex()
             .flex_col()
-            .bg(rgb(tk::bg()))
+            .bg(rgb(tk::paper()))
             .text_color(rgb(tk::text()))
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::on_key))
@@ -3185,19 +3527,22 @@ impl Render for EditorView {
                     v.space = false;
                 }
             }))
+            .relative()
+            .font_family(tk::font())
             .child(self.top_bar(window, cx))
             .child(
                 div()
                     .flex_1()
                     .min_h_0()
                     .flex()
-                    .relative()
-                    .child(self.toolbar(cx))
-                    .child(canvas_el)
-                    .child(self.panel(window, cx))
-                    .children(toast),
+                    .gap(px(ui::S4))
+                    .px(px(ui::S4))
+                    .pb(px(ui::S4))
+                    .child(stage)
+                    .when(!self.panel_hidden, |d| d.child(self.panel(window, cx))),
             )
             .when(self.export_open, |d| d.child(self.export_menu(cx)))
+            .children(self.header_overlays(cx))
     }
 }
 

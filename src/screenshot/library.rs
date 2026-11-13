@@ -21,7 +21,7 @@ pub fn new_path(folder: &Path, stamp: &str) -> Result<PathBuf> {
 }
 
 /// Is this an original screenshot or imported image (not an export)?
-fn is_original(p: &Path) -> bool {
+pub fn is_original(p: &Path) -> bool {
     let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
     (name.starts_with("Screenshot_") || name.starts_with("Image_") || name.starts_with("Merge_")) && name.ends_with(".png") && !name.contains("_edited_")
 }

@@ -1,96 +1,35 @@
-//! The gradient library: the app's own gradients plus uiGradients and WebGradients (both MIT,
-//! bundled with their licenses; see Credits), categorized by color, and the animated presets.
-//! The JSON is compiled into the app and parsed once on first use.
+//! The built-in backgrounds: five gradient presets (one light, three colorful, one dark) and
+//! the animated presets. Every other gradient the app used to ship is in a compact table
+//! (`assets/gradients/legacy.tsv`) that is only read to migrate a favorite that pointed at
+//! one (`legacy`); projects store a background's full stops, so they never needed it.
 
 use super::color::{self, Rgb};
 use super::{AnimStyle, Animated, Gradient, GradientKind, Stop};
-use serde::Deserialize;
 use std::sync::OnceLock;
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
-pub enum Category {
-    Dark,
-    Pastel,
-    Vibrant,
-    Sunset,
-    Ocean,
-    Neon,
-    Minimal,
-}
-
-impl Category {
-    pub const ALL: [Category; 7] =
-        [Category::Dark, Category::Pastel, Category::Vibrant, Category::Sunset, Category::Ocean, Category::Neon, Category::Minimal];
-    pub fn label(self) -> &'static str {
-        match self {
-            Category::Dark => "Dark",
-            Category::Pastel => "Pastel",
-            Category::Vibrant => "Vibrant",
-            Category::Sunset => "Sunset",
-            Category::Ocean => "Ocean",
-            Category::Neon => "Neon",
-            Category::Minimal => "Minimal",
-        }
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct Preset {
-    /// Stable id: "app:N", "ug:Name", "wg:NNN".
+    /// Stable id ("app:N", the gradient's id since it first shipped).
     pub id: String,
     pub name: String,
-    pub source: &'static str,
     pub gradient: Gradient,
-    pub categories: Vec<Category>,
 }
 
-/// Categories from the colors' OKLCh lightness, chroma and hue. A gradient can be in several.
-pub fn categorize(colors: &[Rgb]) -> Vec<Category> {
-    if colors.is_empty() {
-        return Vec::new();
-    }
-    let lch: Vec<(f32, f32, f32)> = colors.iter().map(|&c| color::lch(c)).collect();
-    let n = lch.len() as f32;
-    let avg_l = lch.iter().map(|c| c.0).sum::<f32>() / n;
-    let avg_c = lch.iter().map(|c| c.1).sum::<f32>() / n;
-    let max_c = lch.iter().map(|c| c.1).fold(0.0, f32::max);
-    let chromatic: Vec<f32> = lch.iter().filter(|c| c.1 > 0.05).map(|c| c.2).collect();
-    let share = |f: &dyn Fn(f32) -> bool| if chromatic.is_empty() { 0.0 } else { chromatic.iter().filter(|&&h| f(h)).count() as f32 / chromatic.len() as f32 };
-    let spread = {
-        let first = colors[0];
-        colors.iter().map(|&c| {
-            let (a, b) = (color::to_lab(first), color::to_lab(c));
-            ((a.l - b.l).powi(2) + (a.a - b.a).powi(2) + (a.b - b.b).powi(2)).sqrt()
-        }).fold(0.0, f32::max)
-    };
-    let mut out = Vec::new();
-    if avg_l < 0.45 {
-        out.push(Category::Dark);
-    }
-    if avg_l > 0.78 && avg_c < 0.11 {
-        out.push(Category::Pastel);
-    }
-    if avg_c > 0.14 {
-        out.push(Category::Vibrant);
-    }
-    // Reds, oranges, yellows and pinks.
-    if share(&|h| !(95.0..=320.0).contains(&h)) >= 0.6 && avg_c > 0.06 {
-        out.push(Category::Sunset);
-    }
-    // Teals, cyans and blues.
-    if share(&|h| (170.0..=275.0).contains(&h)) >= 0.6 {
-        out.push(Category::Ocean);
-    }
-    if max_c > 0.22 && lch.iter().any(|c| c.1 > 0.2 && c.0 > 0.6) {
-        out.push(Category::Neon);
-    }
-    if avg_c < 0.05 || spread < 0.12 {
-        out.push(Category::Minimal);
-    }
-    out
+/// The five presets, in picker order: light, three colorful, dark. Picked from the old set
+/// for smooth transitions (neighboring hues, no gray middle) and contrast with both light
+/// and dark screen content.
+pub fn gradients() -> &'static [Preset] {
+    static ALL: OnceLock<Vec<Preset>> = OnceLock::new();
+    ALL.get_or_init(|| {
+        crate::style::GRADIENTS
+            .iter()
+            .enumerate()
+            .map(|(i, g)| Preset { id: g.id.to_string(), name: g.name.to_string(), gradient: builtin_gradient(i) })
+            .collect()
+    })
 }
 
-/// The app's original gradient `i` (see `style::GRADIENTS`).
+/// Preset `i` (see `style::GRADIENTS`).
 pub fn builtin_gradient(i: usize) -> Gradient {
     let g = &crate::style::GRADIENTS[i.min(crate::style::GRADIENTS.len() - 1)];
     let kind = match g.shape {
@@ -100,66 +39,38 @@ pub fn builtin_gradient(i: usize) -> Gradient {
     Gradient { kind, stops: g.stops.iter().map(|&(pos, color)| Stop { pos, color }).collect(), grain: 0.0 }
 }
 
-#[derive(Deserialize)]
-struct UiGradient {
-    name: String,
-    colors: Vec<String>,
-}
-
-#[derive(Deserialize)]
-struct WebStop {
-    color: String,
-    pos: f32,
-}
-
-#[derive(Deserialize)]
-struct WebGradient {
-    name: String,
-    index: String,
-    deg: f32,
-    gradient: Vec<WebStop>,
-}
-
-fn build() -> Vec<Preset> {
-    let mut out = Vec::new();
-    let mut push = |id: String, name: String, source: &'static str, gradient: Gradient| {
-        let categories = categorize(&gradient.colors());
-        out.push(Preset { id, name, source, gradient, categories });
-    };
-    for (i, g) in crate::style::GRADIENTS.iter().enumerate() {
-        push(format!("app:{i}"), g.name.to_string(), "Clipper", builtin_gradient(i));
-    }
-    let ug: Vec<UiGradient> = serde_json::from_str(include_str!("../../assets/gradients/uigradients.json")).unwrap_or_default();
-    for g in ug {
-        let colors: Vec<Rgb> = g.colors.iter().filter_map(|c| color::parse_hex(c)).collect();
-        if colors.len() >= 2 {
-            push(format!("ug:{}", g.name), g.name, "uiGradients", Gradient::linear(90.0, &colors));
+/// A removed preset by its old id: (name, gradient).
+pub fn legacy(id: &str) -> Option<(String, Gradient)> {
+    include_str!("../../assets/gradients/legacy.tsv").lines().filter(|l| !l.starts_with('#')).find_map(|line| {
+        let mut f = line.split('\t');
+        if f.next()? != id {
+            return None;
         }
-    }
-    let wg: Vec<WebGradient> = serde_json::from_str(include_str!("../../assets/gradients/webgradients.json")).unwrap_or_default();
-    for g in wg {
-        let stops: Vec<Stop> = g.gradient.iter().filter_map(|s| Some(Stop { pos: s.pos / 100.0, color: color::parse_hex(&s.color)? })).collect();
-        if stops.len() >= 2 {
-            push(format!("wg:{}", g.index), g.name, "WebGradients", Gradient { kind: GradientKind::Linear { angle: g.deg }, stops, grain: 0.0 });
-        }
-    }
-    out
+        let name = f.next()?.to_string();
+        let shape = f.next()?;
+        let stops: Vec<Stop> = f
+            .next()?
+            .split(' ')
+            .filter_map(|s| {
+                let (p, c) = s.split_once(':')?;
+                Some(Stop { pos: p.parse().ok()?, color: color::parse_hex(c)? })
+            })
+            .collect();
+        let kind = match shape.split_at(1) {
+            ("L", a) => GradientKind::Linear { angle: a.parse().ok()? },
+            ("R", xy) => {
+                let (x, y) = xy.split_once(',')?;
+                GradientKind::Radial { cx: x.parse().ok()?, cy: y.parse().ok()? }
+            }
+            _ => return None,
+        };
+        (stops.len() >= 2).then(|| (name, Gradient { kind, stops, grain: 0.0 }))
+    })
 }
 
-/// Every built-in gradient preset (the app's own first).
-pub fn gradients() -> &'static [Preset] {
-    static ALL: OnceLock<Vec<Preset>> = OnceLock::new();
-    ALL.get_or_init(build)
-}
-
-/// Presets matching a name search and an optional category.
-pub fn search(query: &str, category: Option<Category>) -> Vec<&'static Preset> {
-    let q = query.trim().to_lowercase();
-    gradients()
-        .iter()
-        .filter(|p| q.is_empty() || p.name.to_lowercase().contains(&q))
-        .filter(|p| category.is_none_or(|c| p.categories.contains(&c)))
-        .collect()
+/// Any preset id, kept or removed.
+pub fn resolve(id: &str) -> Option<(String, Gradient)> {
+    gradients().iter().find(|p| p.id == id).map(|p| (p.name.clone(), p.gradient.clone())).or_else(|| legacy(id))
 }
 
 #[derive(Clone, Debug)]
@@ -173,7 +84,7 @@ const fn hex(v: u32) -> Rgb {
     [(v >> 16) as u8, (v >> 8) as u8, v as u8]
 }
 
-/// The animated presets.
+/// The animated presets (used for defaults and tests; the picker animates any gradient).
 pub fn animated() -> &'static [AnimPreset] {
     static ALL: OnceLock<Vec<AnimPreset>> = OnceLock::new();
     ALL.get_or_init(|| {
@@ -207,30 +118,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn library_has_over_200_categorized_presets() {
+    fn exactly_five_presets_light_dark_and_colorful() {
         let all = gradients();
-        assert!(all.len() > 200, "{} presets", all.len());
-        assert!(all.iter().any(|p| p.source == "uiGradients") && all.iter().any(|p| p.source == "WebGradients"));
-        // Ids are unique.
+        assert_eq!(all.len(), 5);
+        let light = |p: &Preset| p.gradient.colors().iter().map(|&c| color::lch(c).0).sum::<f32>() / p.gradient.stops.len() as f32;
+        assert!(all.iter().any(|p| light(p) > 0.8), "one light");
+        assert!(all.iter().any(|p| light(p) < 0.35), "one dark");
         let mut ids: Vec<&str> = all.iter().map(|p| p.id.as_str()).collect();
-        ids.sort();
         ids.dedup();
-        assert_eq!(ids.len(), all.len());
-        for c in Category::ALL {
-            let n = search("", Some(c)).len();
-            assert!(n >= 5, "{c:?} has only {n}");
-        }
-        assert!(!search("sunset", None).is_empty());
-        assert!(search("zzz-no-such", None).is_empty());
+        assert_eq!(ids.len(), 5);
     }
 
     #[test]
-    fn categories_follow_color() {
-        assert!(categorize(&[[10, 10, 20], [30, 20, 60]]).contains(&Category::Dark));
-        assert!(categorize(&[[250, 220, 230], [220, 235, 250]]).contains(&Category::Pastel));
-        assert!(categorize(&[[0, 90, 200], [0, 200, 220]]).contains(&Category::Ocean));
-        assert!(categorize(&[[255, 94, 0], [255, 200, 0]]).contains(&Category::Sunset));
-        assert!(categorize(&[[200, 200, 200], [210, 210, 210]]).contains(&Category::Minimal));
+    fn removed_presets_still_resolve() {
+        // The old default (Dawn), a uiGradients and a WebGradients preset.
+        let (name, g) = resolve("app:0").expect("Dawn");
+        assert_eq!(name, "Dawn");
+        assert_eq!(g.kind, GradientKind::Linear { angle: 112.0 });
+        assert_eq!(g.stops[0], Stop { pos: 0.09, color: [0x72, 0xa7, 0xe8] });
+        assert!(matches!(resolve("app:2").unwrap().1.kind, GradientKind::Radial { .. }));
+        assert!(legacy("zzz").is_none());
+        let n = include_str!("../../assets/gradients/legacy.tsv").lines().filter(|l| !l.starts_with('#')).count();
+        assert!(n > 500, "{n}");
+        // Kept presets resolve to themselves.
+        assert_eq!(resolve(&gradients()[0].id).unwrap().1, gradients()[0].gradient);
     }
 
     #[test]

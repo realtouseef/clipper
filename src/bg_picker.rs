@@ -1,12 +1,13 @@
 //! The background picker, shared by the recorder (Scene tab) and the screenshot editor
-//! (Frame tool): tabs Gradients, Animated, Images and Colors over the one background system
-//! in `backgrounds`. It emits `PickerEvent::Changed` with the new background; the owner
+//! (Background panel): a segmented control (Gradient, Color, Image) over the one background
+//! system in `backgrounds`. Gradient shows the five presets, a Custom swatch that opens the
+//! gradient editor, the user's saved gradients ("Mine") and an Animate toggle. It emits `PickerEvent::Changed` with the new background; the owner
 //! stores it and re-renders.
 
 use crate::theme as tk;
 use crate::backgrounds::generators::{self, Harmony};
 use crate::backgrounds::library::{self, Filter};
-use crate::backgrounds::presets::{self, Category};
+use crate::backgrounds::presets;
 use crate::backgrounds::{self, AnimStyle, Animated, Background, Fit, Gradient, GradientKind, ImageBg, ImageSource, Rgb, Stop};
 use crate::ui;
 
@@ -19,7 +20,7 @@ use gpui_kit::prelude::*;
 use gpui_kit::{
     AnyElement, Bounds, ClickEvent, DispatchPhase, Div, Entity, EventEmitter, ExternalPaths, FontWeight, MouseButton,
     MouseDownEvent, MouseMoveEvent, MouseUpEvent, ObjectFit, PathPromptOptions, Pixels, RenderImage, SharedString, Subscription,
-    Window, div, hsla, img, px, rgb,
+    Window, div, img, px, rgb,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -34,40 +35,32 @@ pub enum PickerEvent {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Tab {
-    Gradients,
-    Animated,
-    Images,
-    Colors,
+    /// Static or animated gradients.
+    Gradient,
+    Color,
+    Image,
 }
 
 impl Tab {
-    const ALL: [Tab; 4] = [Tab::Gradients, Tab::Animated, Tab::Images, Tab::Colors];
+    const ALL: [Tab; 3] = [Tab::Gradient, Tab::Color, Tab::Image];
     fn label(self) -> &'static str {
         match self {
-            Tab::Gradients => "Gradients",
-            Tab::Animated => "Animated",
-            Tab::Images => "Images",
-            Tab::Colors => "Colors",
+            Tab::Gradient => "Gradient",
+            Tab::Color => "Color",
+            Tab::Image => "Image",
         }
     }
     fn of(bg: &Background) -> Tab {
         match bg {
-            Background::Gradient(_) => Tab::Gradients,
-            Background::Animated(_) => Tab::Animated,
-            Background::Image(_) => Tab::Images,
-            Background::Solid { .. } => Tab::Colors,
+            Background::Gradient(_) | Background::Animated(_) => Tab::Gradient,
+            Background::Image(_) => Tab::Image,
+            Background::Solid { .. } => Tab::Color,
         }
     }
 }
 
-/// Which gradient list is shown.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum List {
-    All,
-    Favorites,
-    Mine,
-    Cat(Category),
-}
+/// Swatch size in the Gradient tab: three to a row in the 320 px panel.
+const SWATCH_H: f32 = 72.0;
 
 /// Numeric settings with a slider.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
@@ -98,22 +91,7 @@ enum Drag {
     Focal,
 }
 
-const SOLIDS: [Rgb; 14] = [
-    [0xf2, 0xf2, 0xf4],
-    [0xff, 0xff, 0xff],
-    [0x0a, 0x0a, 0x0b],
-    [0x1c, 0x1c, 0x1f],
-    [0xa4, 0xf4, 0x7c],
-    [0x30, 0xd1, 0x58],
-    [0x0a, 0x84, 0xff],
-    [0x5e, 0x5c, 0xe6],
-    [0xbf, 0x5a, 0xf2],
-    [0xff, 0x37, 0x5f],
-    [0xff, 0x9f, 0x0a],
-    [0xff, 0xd6, 0x0a],
-    [0xfb, 0xe2, 0xd5],
-    [0xd8, 0xe7, 0xf5],
-];
+const SOLIDS: [Rgb; 14] = tk::content::SOLIDS;
 
 /// Thumbnails, shared by every picker (keyed by preset/image id).
 fn thumbs() -> &'static Mutex<HashMap<String, Arc<RenderImage>>> {
@@ -138,8 +116,8 @@ pub struct BgPicker {
     portrait: bool,
     /// The editor shows a "moment" slider for animated backgrounds.
     moment: Option<f32>,
-    list: List,
-    limit: usize,
+    /// The gradient editor is open (the Custom swatch).
+    custom_open: bool,
     image_filter: Option<Filter>,
     hue: f32,
     harmony: Harmony,
@@ -148,7 +126,6 @@ pub struct BgPicker {
     selected_image: Option<String>,
     drag: Option<Drag>,
     bounds: Rc<RefCell<HashMap<&'static str, Bounds<Pixels>>>>,
-    query: Entity<InputState>,
     rename: Entity<InputState>,
     tags: Entity<InputState>,
     /// Picks the edited color (stop, mesh corner or solid).
@@ -163,16 +140,10 @@ impl EventEmitter<PickerEvent> for BgPicker {}
 
 impl BgPicker {
     pub fn new(bg: Background, portrait: bool, moment: Option<f32>, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let query = cx.new(|cx| InputState::new(window, cx).placeholder("Search gradients"));
         let rename = cx.new(|cx| InputState::new(window, cx).placeholder("Name"));
         let tags = cx.new(|cx| InputState::new(window, cx).placeholder("Tags, comma separated"));
         let color = cx.new(|cx| ColorPickerState::new(window, cx));
-        let mut subs = vec![cx.subscribe_in(&query, window, |this: &mut Self, _, ev: &InputEvent, _, cx| {
-            if matches!(ev, InputEvent::Change) {
-                this.limit = 60;
-                cx.notify();
-            }
-        })];
+        let mut subs = vec![];
         subs.push(cx.subscribe_in(&rename, window, |this: &mut Self, input, ev: &InputEvent, _, cx| {
             if matches!(ev, InputEvent::PressEnter { .. } | InputEvent::Blur) {
                 if let Some(id) = this.selected_image.clone() {
@@ -205,8 +176,7 @@ impl BgPicker {
             bg,
             portrait,
             moment,
-            list: List::All,
-            limit: 60,
+            custom_open: false,
             image_filter: None,
             hue: 200.0,
             harmony: Harmony::Analogous,
@@ -215,7 +185,6 @@ impl BgPicker {
             selected_image: None,
             drag: None,
             bounds: Rc::new(RefCell::new(HashMap::new())),
-            query,
             rename,
             tags,
             color,
@@ -559,120 +528,153 @@ impl BgPicker {
 
     // ---------- tabs ----------
 
+    /// A gradient swatch: a large rendered preview, ink outline when selected.
+    fn grad_swatch(&self, id: &str, name: String, g: &Gradient, on: bool, cx: &mut Context<Self>, click: impl Fn(&mut Self, &mut Context<Self>) + 'static) -> AnyElement {
+        let t = thumb(&format!("g:{id}:{:?}", g.stops), || Some(backgrounds::render::gradient(g, 200, 144)));
+        ui::swatch(SharedString::from(format!("gs-{id}")), on, div().size_full().children(t.map(|t| img(t).size_full().object_fit(ObjectFit::Cover))))
+            .h(px(SWATCH_H))
+            .tooltip(move |w, cx| Tooltip::new(name.clone()).build(w, cx))
+            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| click(this, cx)))
+            .into_any_element()
+    }
+
     fn gradients_tab(&mut self, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        let q = self.query.read(cx).value().to_string();
-        let lib = library::global().lock().unwrap();
-        let named = |p: &presets::Preset| (p.id.clone(), format!("{} · {}", p.name, p.source), p.gradient.clone());
-        let items: Vec<(String, String, Gradient)> = match self.list {
-            List::Mine => lib.saved_gradients().iter().map(|g| (g.id.clone(), g.name.clone(), g.gradient.clone())).collect(),
-            List::Favorites => {
-                let mut v: Vec<(String, String, Gradient)> = presets::search(&q, None).into_iter().filter(|p| lib.is_favorite(&p.id)).map(named).collect();
-                v.extend(lib.saved_gradients().iter().filter(|g| lib.is_favorite(&g.id)).map(|g| (g.id.clone(), g.name.clone(), g.gradient.clone())));
-                v
-            }
-            List::All => presets::search(&q, None).into_iter().map(named).collect(),
-            List::Cat(c) => presets::search(&q, Some(c)).into_iter().map(named).collect(),
+        // The colors on show (static or animated); a swatch is selected when they match.
+        let (current, anim) = match &self.bg {
+            Background::Gradient(g) => (Some(g.clone()), None),
+            Background::Animated(a) => (None, Some(a.clone())),
+            _ => (None, None),
         };
-        let favs: Vec<bool> = items.iter().map(|(id, _, _)| lib.is_favorite(id)).collect();
-        drop(lib);
-        let total = items.len();
-        let current = match &self.bg {
-            Background::Gradient(g) => Some(g.clone()),
+        let matches = |g: &Gradient| match (&current, &anim) {
+            (Some(c), _) => c == g,
+            (_, Some(a)) => {
+                let mut x = a.colors.clone();
+                let mut y = g.colors();
+                x.sort();
+                y.sort();
+                x == y
+            }
+            _ => false,
+        };
+        let pick = |g: Gradient| {
+            move |this: &mut Self, cx: &mut Context<Self>| {
+                this.stop = 0;
+                this.custom_open = false;
+                match &this.bg {
+                    Background::Animated(_) => {
+                        let mut c = g.colors();
+                        // Aurora's first color is the base: start from the darkest.
+                        c.sort_by(|x, y| backgrounds::color::lch(*x).0.total_cmp(&backgrounds::color::lch(*y).0));
+                        this.edit_anim(cx, |a| a.colors = c);
+                    }
+                    _ => this.set(Background::Gradient(g.clone()), cx),
+                }
+            }
+        };
+        let mut grid = div().grid().grid_cols(3).gap(px(ui::S2));
+        let mut any_selected = false;
+        for p in presets::gradients() {
+            let on = !self.custom_open && matches(&p.gradient);
+            any_selected |= on;
+            grid = grid.child(self.grad_swatch(&p.id, p.name.clone(), &p.gradient, on, cx, pick(p.gradient.clone())));
+        }
+        let mine: Vec<library::SavedGradient> = library::global().lock().unwrap().saved_gradients().to_vec();
+        let mine_selected = mine.iter().any(|g| matches(&g.gradient));
+        // Custom: the current gradient when it's none of the swatches, else a plus.
+        let custom_on = self.custom_open || (current.is_some() && !any_selected && !mine_selected);
+        let custom_fill = match (&current, custom_on) {
+            (Some(g), true) => thumb(&format!("custom:{:?}", g.stops), || Some(backgrounds::render::gradient(g, 200, 144))).map(|t| img(t).size_full().object_fit(ObjectFit::Cover).into_any_element()),
             _ => None,
         };
-
-        // Category chips.
-        let mut chips = div().flex().flex_wrap().gap(px(6.));
-        let mut lists = vec![(List::All, "All".to_string()), (List::Favorites, "★ Favorites".into()), (List::Mine, "Mine".into())];
-        lists.extend(Category::ALL.map(|c| (List::Cat(c), c.label().to_string())));
-        for (i, (l, label)) in lists.into_iter().enumerate() {
-            let on = self.list == l;
-            chips = chips.child(
+        grid = grid.child(
+            ui::swatch("gs-custom", custom_on, div().size_full().relative().bg(rgb(tk::raised())).children(custom_fill).child(
                 div()
-                    .id(("list", i))
-                    .px(px(10.))
-                    .h(px(26.))
+                    .absolute()
+                    .inset_0()
                     .flex()
+                    .flex_col()
                     .items_center()
-                    .rounded_full()
-                    .text_xs()
-                    .font_weight(FontWeight::MEDIUM)
-                    .cursor_pointer()
-                    .when(on, |d| d.bg(rgb(tk::text())).text_color(rgb(tk::bg())))
-                    .when(!on, |d| d.bg(rgb(tk::raised())).text_color(rgb(tk::muted())).hover(|d| d.text_color(rgb(tk::text()))))
-                    .child(label)
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                        this.list = l;
-                        this.limit = 60;
-                        cx.notify();
-                    })),
-            );
+                    .justify_center()
+                    .gap(px(2.))
+                    .text_size(px(tk::T12))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .when(!custom_on || current.is_none(), |d| d.child(crate::editor::icons::plus().size(px(18.))).child("Custom"))
+                    .when(custom_on && current.is_some(), |d| d.child(div().px(px(ui::S2)).py(px(2.)).rounded_full().bg(rgb(tk::paper())).child("Custom"))),
+            ))
+            .h(px(SWATCH_H))
+            .tooltip(|w, cx| Tooltip::new("Edit your own gradient").build(w, cx))
+            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                this.custom_open = !this.custom_open;
+                // Start from what's showing.
+                let start = match &this.bg {
+                    Background::Gradient(_) => None,
+                    Background::Animated(a) => Some(Gradient::linear(135.0, &a.colors)),
+                    _ => Some(presets::gradients()[0].gradient.clone()),
+                };
+                if let (true, Some(g)) = (this.custom_open, start) {
+                    this.set(Background::Gradient(g), cx);
+                }
+                cx.notify();
+            })),
+        );
+        let mut out = vec![grid.into_any_element()];
+        if !mine.is_empty() {
+            let mut mg = div().grid().grid_cols(3).gap(px(ui::S2));
+            for g in &mine {
+                let on = !self.custom_open && matches(&g.gradient);
+                mg = mg.child(self.grad_swatch(&g.id, g.name.clone(), &g.gradient, on, cx, pick(g.gradient.clone())));
+            }
+            out.push(ui::field("Mine", None, mg).into_any_element());
         }
-
-        let mut grid = div().flex().flex_wrap().gap(px(6.));
-        for (i, ((id, name, g), fav)) in items.into_iter().zip(favs).take(self.limit).enumerate() {
-            let on = current.as_ref() == Some(&g);
-            let t = thumb(&format!("g:{id}"), || Some(backgrounds::render::gradient(&g, 112, 76)));
-            let (fid, g2) = (id.clone(), g.clone());
-            grid = grid.child(
-                div()
-                    .id(("grad", i))
-                    .group("tile")
-                    .relative()
-                    .w(px(56.))
-                    .h(px(38.))
-                    .rounded(px(9.))
-                    .overflow_hidden()
-                    .border_2()
-                    .border_color(if on { gpui_kit::Hsla::from(rgb(tk::text())) } else { ui::hairline() })
-                    .cursor_pointer()
-                    .children(t.map(|t| img(t).size_full().rounded(px(7.)).object_fit(ObjectFit::Cover)))
-                    .tooltip({
-                        let n = name.clone();
-                        move |w, cx| Tooltip::new(n.clone()).build(w, cx)
-                    })
-                    .child(
-                        div()
-                            .id(("fav", i))
-                            .absolute()
-                            .top(px(1.))
-                            .right(px(3.))
-                            .text_xs()
-                            .text_color(if fav { rgb(0xffd60a).into() } else { hsla(0., 0., 1.0, 0.85) })
-                            .when(!fav, |d| d.invisible().group_hover("tile", |d| d.visible()))
-                            .child(if fav { "★" } else { "☆" })
-                            .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
-                                cx.stop_propagation();
-                                library::global().lock().unwrap().toggle_favorite(&fid);
-                                cx.notify();
-                            })),
-                    )
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                        this.stop = 0;
-                        this.set(Background::Gradient(g2.clone()), cx);
-                    })),
-            );
+        // Animate: the same colors, moving with the timeline.
+        let animated = anim.is_some();
+        let this = cx.entity().downgrade();
+        out.push(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .child(div().text_size(px(tk::T13)).font_weight(FontWeight::MEDIUM).child("Animate"))
+                .child(Switch::new("animate").cursor_pointer().checked(animated).on_click(move |on: &bool, _, cx| {
+                    let on = *on;
+                    let _ = this.update(cx, |p, cx| p.set_animated(on, cx));
+                }))
+                .into_any_element(),
+        );
+        match (anim, current) {
+            (Some(a), _) => out.extend(self.anim_settings(&a, cx)),
+            (None, Some(g)) if self.custom_open => {
+                out.extend(self.gradient_editor(&g, cx));
+                out.extend(self.generator(cx));
+            }
+            _ => {}
         }
-        let mut out = vec![
-            Input::new(&self.query).small().into_any_element(),
-            chips.into_any_element(),
-            grid.into_any_element(),
-        ];
-        if total > self.limit {
-            out.push(
-                Button::new("more").cursor_pointer().ghost().small().label(format!("Show all {total}")).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                    this.limit = usize::MAX;
-                    cx.notify();
-                })).into_any_element(),
-            );
-        } else if total == 0 {
-            out.push(ui::hint(if self.list == List::Mine { "Gradients you save show up here." } else { "No gradients match." }).into_any_element());
-        }
-        if let Some(g) = current {
-            out.extend(self.gradient_editor(&g, cx));
-        }
-        out.extend(self.generator(cx));
         out
+    }
+
+    /// Animate on: the current gradient's colors as an animated background; off: back to a
+    /// static gradient of the same colors.
+    fn set_animated(&mut self, on: bool, cx: &mut Context<Self>) {
+        match (&self.bg, on) {
+            (Background::Gradient(g), true) => {
+                let mut c = g.colors();
+                c.sort_by(|x, y| backgrounds::color::lch(*x).0.total_cmp(&backgrounds::color::lch(*y).0));
+                c.truncate(6);
+                self.custom_open = false;
+                self.set(Background::Animated(Animated { colors: c, ..Animated::default() }), cx);
+            }
+            (Background::Animated(a), false) => {
+                let g = presets::gradients().iter().map(|p| &p.gradient).find(|g| {
+                    let (mut x, mut y) = (g.colors(), a.colors.clone());
+                    x.sort();
+                    y.sort();
+                    x == y
+                });
+                let g = g.cloned().unwrap_or_else(|| Gradient::linear(135.0, &a.colors));
+                self.set(Background::Gradient(g), cx);
+            }
+            _ => {}
+        }
     }
 
     fn gradient_editor(&mut self, g: &Gradient, cx: &mut Context<Self>) -> Vec<AnyElement> {
@@ -712,7 +714,7 @@ impl BgPicker {
             })
             .collect();
         let mut out = vec![
-            div().pt(px(ui::S2)).text_sm().font_weight(FontWeight::SEMIBOLD).child("Edit gradient").into_any_element(),
+            div().pt(px(ui::S2)).text_size(px(tk::T13)).font_weight(FontWeight::SEMIBOLD).child("Edit gradient").into_any_element(),
             ui::segmented("gkind", kinds).into_any_element(),
         ];
         if matches!(g.kind, GradientKind::Linear { .. } | GradientKind::Conic { .. }) {
@@ -750,7 +752,7 @@ impl BgPicker {
             .items_center()
             .gap_2()
             .when(!matches!(g.kind, GradientKind::Mesh { .. }) && g.stops.len() > 2, |d| {
-                d.child(Button::new("rm-stop").cursor_pointer().ghost().xsmall().text_color(rgb(tk::red())).label("Remove stop").on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                d.child(Button::new("rm-stop").cursor_pointer().ghost().xsmall().text_color(rgb(tk::error_text())).label("Remove stop").on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                     let i = this.stop;
                     this.edit_gradient(cx, |g| {
                         if g.stops.len() > 2 && i < g.stops.len() {
@@ -808,7 +810,7 @@ impl BgPicker {
                     .h(px(36.))
                     .rounded(px(5.))
                     .border_2()
-                    .border_color(rgb(if on { tk::text() } else { 0x8a8a90 }))
+                    .border_color(rgb(if on { tk::text() } else { tk::stone() }))
                     .bg(rgb(hex(s.color)))
                     .shadow_md()
                     .cursor_pointer()
@@ -820,7 +822,7 @@ impl BgPicker {
                     })),
             );
         }
-        ui::field("Stops", Some("click to add · drag to move".into()), bar)
+        ui::field("Stops", Some("Click to add, drag to move".into()), bar)
     }
 
     fn generator(&mut self, cx: &mut Context<Self>) -> Vec<AnyElement> {
@@ -836,13 +838,13 @@ impl BgPicker {
             })
             .collect();
         vec![
-            div().pt(px(ui::S2)).text_sm().font_weight(FontWeight::SEMIBOLD).child("Generate").into_any_element(),
+            div().pt(px(ui::S2)).text_size(px(tk::T13)).font_weight(FontWeight::SEMIBOLD).child("Generate").into_any_element(),
             self.knob(Knob::Hue, "Base hue", cx).into_any_element(),
             ui::segmented("harmony", harmonies).into_any_element(),
             div()
                 .flex()
                 .gap_2()
-                .child(Button::new("randomize").cursor_pointer().secondary().small().flex_1().label("Randomize").on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                .child(Button::new("randomize").cursor_pointer().secondary().small().rounded_full().flex_1().label("Randomize").on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                     this.seed = this.seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407) ^ std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(7);
                     let (g, hue, harmony) = generators::random(this.seed);
                     this.hue = hue;
@@ -850,11 +852,11 @@ impl BgPicker {
                     this.stop = 0;
                     this.set(Background::Gradient(g), cx);
                 })))
-                .child(Button::new("save-preset").cursor_pointer().secondary().small().flex_1().label("Save as preset").on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                .child(Button::new("save-preset").cursor_pointer().secondary().small().rounded_full().flex_1().label("Save to Mine").on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                     if let Background::Gradient(g) = &this.bg {
                         let n = library::global().lock().unwrap().saved_gradients().len() + 1;
                         library::global().lock().unwrap().save_gradient(&format!("Custom {n}"), g.clone());
-                        this.list = List::Mine;
+                        this.custom_open = false;
                         cx.notify();
                     }
                 })))
@@ -862,42 +864,9 @@ impl BgPicker {
         ]
     }
 
-    fn animated_tab(&mut self, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        let current = match &self.bg {
-            Background::Animated(a) => Some(a.clone()),
-            _ => None,
-        };
-        let mut grid = div().flex().flex_wrap().gap(px(6.));
-        for (i, p) in presets::animated().iter().enumerate() {
-            let on = current.as_ref().is_some_and(|a| a.colors == p.anim.colors && a.style == p.anim.style);
-            let t = thumb(&format!("a:{}", p.id), || {
-                let low = backgrounds::render::animated_frame(&p.anim, 112, 76, 0.0);
-                Some(low)
-            });
-            let anim = p.anim.clone();
-            grid = grid.child(
-                div()
-                    .id(("anim", i))
-                    .w(px(56.))
-                    .h(px(38.))
-                    .rounded(px(9.))
-                    .overflow_hidden()
-                    .border_2()
-                    .border_color(if on { gpui_kit::Hsla::from(rgb(tk::text())) } else { ui::hairline() })
-                    .cursor_pointer()
-                    .children(t.map(|t| img(t).size_full().rounded(px(7.)).object_fit(ObjectFit::Cover)))
-                    .tooltip({
-                        let n = p.name;
-                        move |w, cx| Tooltip::new(n).build(w, cx)
-                    })
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.set(Background::Animated(anim.clone()), cx))),
-            );
-        }
-        let mut out = vec![grid.into_any_element()];
-        let Some(a) = current else {
-            out.push(ui::hint("Pick a preset to start. Animated backgrounds move with the recording's timeline, so pausing freezes them and exports match the preview.").into_any_element());
-            return out;
-        };
+    /// Style, speed and the rest, while Animate is on.
+    fn anim_settings(&mut self, a: &Animated, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        let mut out = Vec::new();
         let styles = AnimStyle::ALL
             .into_iter()
             .map(|s| {
@@ -905,39 +874,9 @@ impl BgPicker {
                 (s.label().into(), a.style == s, on)
             })
             .collect();
-        // Palette from any static gradient.
-        let mut palette = div().flex().flex_wrap().gap(px(6.));
-        for (i, p) in presets::gradients().iter().take(24).enumerate() {
-            let colors = p.gradient.colors();
-            let t = thumb(&format!("g:{}", p.id), || Some(backgrounds::render::gradient(&p.gradient, 112, 76)));
-            palette = palette.child(
-                div()
-                    .id(("pal", i))
-                    .w(px(30.))
-                    .h(px(22.))
-                    .rounded(px(6.))
-                    .overflow_hidden()
-                    .border_1()
-                    .border_color(ui::hairline())
-                    .cursor_pointer()
-                    .children(t.map(|t| img(t).size_full().rounded(px(5.)).object_fit(ObjectFit::Cover)))
-                    .tooltip({
-                        let n = p.name.clone();
-                        move |w, cx| Tooltip::new(format!("Use the colors of {n}")).build(w, cx)
-                    })
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                        let mut c = colors.clone();
-                        // Aurora's first color is the base: start from the darkest.
-                        c.sort_by(|x, y| backgrounds::color::lch(*x).0.total_cmp(&backgrounds::color::lch(*y).0));
-                        c.truncate(6);
-                        this.edit_anim(cx, |a| a.colors = c);
-                    })),
-            );
-        }
-        let swatches = div().flex().gap(px(4.)).children(a.colors.iter().map(|c| div().w(px(22.)).h(px(22.)).rounded(px(6.)).bg(rgb(hex(*c))).border_1().border_color(ui::hairline())));
         out.push(ui::field("Style", None, ui::segmented("astyle", styles)).into_any_element());
-        out.push(ui::field("Palette", None, div().flex().flex_col().gap_2().child(swatches).child(palette)).into_any_element());
         out.push(self.knob(Knob::Speed, "Speed", cx).into_any_element());
+        out.push(ui::hint("Animated backgrounds move with the recording's timeline, so pausing freezes them and exports match the preview.").into_any_element());
         out.push(self.knob(Knob::Intensity, "Intensity", cx).into_any_element());
         out.push(self.knob(Knob::Blur, "Softness", cx).into_any_element());
         out.push(self.knob(Knob::Grain, "Grain", cx).into_any_element());
@@ -948,7 +887,7 @@ impl BgPicker {
                 .flex()
                 .items_center()
                 .justify_between()
-                .child(div().text_sm().child("Freeze motion"))
+                .child(div().text_size(px(tk::T13)).child("Freeze motion"))
                 .child(Switch::new("freeze").cursor_pointer().checked(a.frozen).on_click(move |on: &bool, _, cx| {
                     let on = *on;
                     let _ = this.update(cx, |v, cx| v.edit_anim(cx, |a| a.frozen = on));
@@ -1024,8 +963,8 @@ impl BgPicker {
                 .border_color(if on { gpui_kit::Hsla::from(rgb(tk::text())) } else { ui::hairline() })
                 .cursor_pointer()
                 .children(t.map(|t| img(t).size_full().rounded(px(7.)).object_fit(ObjectFit::Cover)))
-                .when(fav, |d| d.child(div().absolute().top(px(1.)).right(px(3.)).text_xs().text_color(rgb(0xffd60a)).child("★")))
-                .when_some(badge, |d, b| d.child(div().absolute().inset_0().flex().items_center().justify_center().text_xs().text_color(rgb(tk::muted())).child(b)))
+                .when(fav, |d| d.child(div().absolute().top(px(1.)).right(px(3.)).text_size(px(tk::T12)).text_color(rgb(tk::content::FAVORITE)).child("★")))
+                .when_some(badge, |d, b| d.child(div().absolute().inset_0().flex().items_center().justify_center().text_size(px(tk::T12)).text_color(rgb(tk::ink_soft())).child(b)))
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                     let keep = match &this.bg {
                         Background::Image(i) => Some(i.clone()),
@@ -1099,11 +1038,11 @@ impl BgPicker {
             .border_1()
             .border_dashed()
             .border_color(ui::hairline_strong())
-            .text_xs()
-            .text_color(rgb(tk::muted()))
+            .text_size(px(tk::T12))
+            .text_color(rgb(tk::ink_soft()))
             .cursor_pointer()
-            .drag_over::<ExternalPaths>(|s, _, _, _| s.bg(ui::accent_tint()).border_color(rgb(tk::green_ink())))
-            .child(div().text_sm().text_color(rgb(tk::text())).child("Import images"))
+            .drag_over::<ExternalPaths>(|s, _, _, _| s.bg(ui::accent_tint()).border_color(rgb(tk::selected())))
+            .child(div().text_size(px(tk::T13)).text_color(rgb(tk::text())).child("Import images"))
             .child("Drop PNG, JPG or WebP here, or click to choose")
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| this.import(paths.paths().to_vec(), cx)))
             .on_click(cx.listener(|_, _: &ClickEvent, _, cx| {
@@ -1120,12 +1059,12 @@ impl BgPicker {
             .flex()
             .items_center()
             .gap_2()
-            .child(div().flex_1().min_w_0().text_xs().text_color(rgb(tk::muted())).truncate().child(match (&watched, library::scanning()) {
-                (Some(w), true) => format!("Adding images from {w}…"),
+            .child(div().flex_1().min_w_0().text_size(px(tk::T12)).text_color(rgb(tk::ink_soft())).truncate().child(match (&watched, library::scanning()) {
+                (Some(w), true) => format!("Adding images from {w}..."),
                 (Some(w), false) => format!("Watching {w}"),
                 (None, _) => "No watched folder".into(),
             }))
-            .child(Button::new("watch").cursor_pointer().ghost().xsmall().label(if watched.is_some() { "Change" } else { "Watch a folder…" }).on_click(cx.listener(|_, _: &ClickEvent, _, cx| {
+            .child(Button::new("watch").cursor_pointer().ghost().xsmall().label(if watched.is_some() { "Change" } else { "Watch a folder" }).on_click(cx.listener(|_, _: &ClickEvent, _, cx| {
                 let rx = cx.prompt_for_paths(PathPromptOptions { files: false, directories: true, multiple: false, prompt: Some("Watch".into()) });
                 cx.spawn(async move |this, cx| {
                     if let Ok(Ok(Some(paths))) = rx.await {
@@ -1164,7 +1103,7 @@ impl BgPicker {
 
         let mut out = vec![drop_zone.into_any_element(), watch.into_any_element()];
         if let Some(e) = &self.error {
-            out.push(div().text_xs().text_color(rgb(tk::error())).child(e.clone()).into_any_element());
+            out.push(div().text_size(px(tk::T12)).text_color(rgb(tk::error_text())).child(e.clone()).into_any_element());
         }
         if !recent.is_empty() {
             let mut row = div().flex().gap(px(6.));
@@ -1210,9 +1149,9 @@ impl BgPicker {
             ImageSource::Library(id) => Some(id.clone()),
             _ => None,
         };
-        let mut out = vec![div().pt(px(ui::S2)).text_sm().font_weight(FontWeight::SEMIBOLD).child("Adjust image").into_any_element()];
+        let mut out = vec![div().pt(px(ui::S2)).text_size(px(tk::T13)).font_weight(FontWeight::SEMIBOLD).child("Adjust image").into_any_element()];
         if let Some((w, h)) = backgrounds::render::original_size(&ib.source) {
-            out.push(ui::hint(format!("{} · {w} × {h} px", backgrounds::fit::Orientation::of(w, h).label())).into_any_element());
+            out.push(ui::hint(format!("{}, {w} × {h} px", backgrounds::fit::Orientation::of(w, h).label())).into_any_element());
         }
         // Low resolution badge.
         if let Some(size) = backgrounds::render::original_size(&ib.source) {
@@ -1223,8 +1162,8 @@ impl BgPicker {
                         .flex()
                         .items_center()
                         .gap_2()
-                        .child(div().px(px(8.)).py(px(2.)).rounded_full().bg(hsla(0.11, 0.9, 0.5, 0.18)).text_xs().text_color(rgb(tk::warn())).child("Low resolution"))
-                        .child(div().text_xs().text_color(rgb(tk::muted())).child(format!("{} × {} px", size.0, size.1)))
+                        .child(div().px(px(8.)).py(px(2.)).rounded_full().bg(rgb(tk::warning_bg())).text_size(px(tk::T12)).text_color(rgb(tk::warning_text())).child("Low resolution"))
+                        .child(div().text_size(px(tk::T12)).text_color(rgb(tk::ink_soft())).child(format!("{} × {} px", size.0, size.1)))
                         .into_any_element(),
                 );
             }
@@ -1274,8 +1213,8 @@ impl BgPicker {
                                 .size(px(18.))
                                 .rounded_full()
                                 .border_2()
-                                .border_color(rgb(0xffffff))
-                                .bg(hsla(0., 0., 0., 0.3))
+                                .border_color(rgb(tk::WHITE))
+                                .bg(tk::scrim(0.3))
                                 .shadow_md(),
                         )
                         .on_mouse_down(MouseButton::Left, cx.listener(|this, ev: &MouseDownEvent, _, cx| {
@@ -1296,7 +1235,7 @@ impl BgPicker {
         if let Some(id) = lib_id {
             let fav = library::global().lock().unwrap().is_favorite(&id);
             let (id2, id3, id4) = (id.clone(), id.clone(), id.clone());
-            out.push(div().pt(px(ui::S2)).text_sm().font_weight(FontWeight::SEMIBOLD).child("In your library").into_any_element());
+            out.push(div().pt(px(ui::S2)).text_size(px(tk::T13)).font_weight(FontWeight::SEMIBOLD).child("In your library").into_any_element());
             out.push(Input::new(&self.rename).small().into_any_element());
             out.push(Input::new(&self.tags).small().into_any_element());
             let mut row = div()
@@ -1307,7 +1246,7 @@ impl BgPicker {
                     cx.notify();
                 })));
             if missing.contains(&id) {
-                row = row.child(Button::new("relink").cursor_pointer().secondary().small().label("Relink…").on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
+                row = row.child(Button::new("relink").cursor_pointer().secondary().small().label("Relink").on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
                     let id = id3.clone();
                     let rx = cx.prompt_for_paths(PathPromptOptions { files: true, directories: false, multiple: false, prompt: Some("Relink".into()) });
                     cx.spawn(async move |this, cx| {
@@ -1326,7 +1265,7 @@ impl BgPicker {
                     .detach();
                 })));
             }
-            row = row.child(div().flex_1()).child(Button::new("del-img").cursor_pointer().ghost().small().text_color(rgb(tk::red())).label("Delete").on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+            row = row.child(div().flex_1()).child(Button::new("del-img").cursor_pointer().ghost().small().text_color(rgb(tk::error_text())).label("Delete").on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                 library::global().lock().unwrap().delete(&id4);
                 thumbs().lock().unwrap().remove(&format!("i:{id4}"));
                 this.selected_image = None;
@@ -1403,10 +1342,9 @@ impl Render for BgPicker {
                 .collect(),
         );
         let body = match self.tab {
-            Tab::Gradients => self.gradients_tab(cx),
-            Tab::Animated => self.animated_tab(cx),
-            Tab::Images => self.images_tab(window, cx),
-            Tab::Colors => self.colors_tab(cx),
+            Tab::Gradient => self.gradients_tab(cx),
+            Tab::Image => self.images_tab(window, cx),
+            Tab::Color => self.colors_tab(cx),
         };
         // While dragging a slider, stop or focal point, follow the pointer anywhere.
         let dragging = self.drag.is_some();
@@ -1436,12 +1374,12 @@ impl Render for BgPicker {
             .relative()
             .flex()
             .flex_col()
-            .gap(px(ui::S3 + 2.0))
+            .gap(px(ui::S4))
             .child(tabs)
             .children(body)
             .child(
-                div().pt(px(ui::S2)).child(
-                    Button::new("credits").cursor_pointer().ghost().xsmall().text_color(rgb(tk::muted())).label("Gradient credits and licenses").on_click(|_: &ClickEvent, _, cx| crate::credits::open(cx)),
+                div().child(
+                    Button::new("credits").cursor_pointer().ghost().xsmall().rounded_full().text_color(rgb(tk::ink_soft())).label("Credits and licenses").on_click(|_: &ClickEvent, _, cx| crate::credits::open(cx)),
                 ),
             )
             .child(tracker)

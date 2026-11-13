@@ -3,14 +3,13 @@
 
 use crate::theme as tk;
 use crate::screenshot::{self, Mode, cards, capture, library, picker};
-use crate::{Clipper, Stage, note};
+use crate::{Clipper, note};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::switch::Switch;
-use gpui_kit::component::{Disableable, Sizable};
+use gpui_kit::component::Sizable;
 use gpui_kit::prelude::*;
-use gpui_kit::{ClickEvent, Div, ObjectFit, PathPromptOptions, RenderImage, div, img, px, rgb};
+use gpui_kit::{ClickEvent, Div, PathPromptOptions, div, px, rgb};
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Duration;
 
 /// What to capture once the selection is made.
@@ -19,12 +18,6 @@ enum Target {
     Window(capture::WindowInfo, crate::region::Display),
 }
 
-const RECENT: usize = 8;
-/// A recent-shot tile (border included). The picture inside is sized in points, not
-/// `size_full`: with a percentage height it took its own aspect and spilled tall pictures
-/// over the tiles below.
-const TILE_W: f32 = 124.0;
-const TILE_H: f32 = 80.0;
 
 impl Clipper {
     /// At launch: the always-on screenshot hotkey, leftover deletes, recent shots, fonts.
@@ -35,6 +28,7 @@ impl Clipper {
         }
         self.shot_hotkey = Some(registration);
         library::flush_pending(&self.shot.folder);
+        crate::home::flush_pending(&[&crate::recorder::sessions_root().join(".sessions"), &self.out_dir, &self.shot.folder]);
         crate::menubar::install(&self.hotkey_config.screenshot.label());
         self.system_shots = Some(crate::screenshot::watch::Watcher::new());
         crate::editor::text::warm_up();
@@ -191,25 +185,9 @@ impl Clipper {
         }
     }
 
+    /// A screenshot was saved or deleted: the Library re-reads its folders.
     pub(crate) fn refresh_recent(&mut self, cx: &mut Context<Self>) {
-        let folder = self.shot.folder.clone();
-        let task = cx.background_executor().spawn(async move {
-            library::recent(&folder, RECENT)
-                .into_iter()
-                .filter_map(|p| {
-                    let t = image::open(&p).ok()?.thumbnail(240, 160).to_rgba8();
-                    Some((p, crate::canvas_preview::to_render_image(t)))
-                })
-                .collect::<Vec<(PathBuf, Arc<RenderImage>)>>()
-        });
-        cx.spawn(async move |this, cx| {
-            let list = task.await;
-            let _ = this.update(cx, |c, cx| {
-                c.recent_shots = list;
-                cx.notify();
-            });
-        })
-        .detach();
+        self.refresh_library(cx);
     }
 
     pub(crate) fn screenshot_panel(&self, cx: &mut Context<Self>) -> Div {
@@ -250,7 +228,7 @@ impl Clipper {
             .flex_col()
             .gap_2()
             .child(
-                div().flex().items_center().justify_between().gap_3().child(div().flex_1().min_w_0().text_sm().child("Show the card for ⌘⇧3, ⌘⇧4 and ⌘⇧5")).child(
+                div().flex().items_center().justify_between().gap_3().child(div().flex_1().min_w_0().text_size(px(tk::T13)).child("Show the card for ⌘⇧3, ⌘⇧4 and ⌘⇧5")).child(
                     Switch::new("shot-system").cursor_pointer().checked(s.detect_system).on_click(move |on: &bool, _, cx| {
                         let on = *on;
                         let _ = this2.update(cx, |c, cx| {
@@ -262,7 +240,7 @@ impl Clipper {
                 ),
             )
             .child(note(&format!("Watching {}", crate::display_path(&screenshot::watch::system_dir()))));
-        let cursor = div().flex().items_center().justify_between().child(div().text_sm().child("Show the mouse pointer")).child(
+        let cursor = div().flex().items_center().justify_between().child(div().text_size(px(tk::T13)).child("Show the mouse pointer")).child(
             Switch::new("shot-cursor").cursor_pointer().checked(s.cursor).on_click(move |on: &bool, _, cx| {
                 let on = *on;
                 let _ = this.update(cx, |c, cx| {
@@ -277,12 +255,12 @@ impl Clipper {
             .flex()
             .flex_col()
             .gap_2()
-            .child(div().text_xs().text_color(rgb(tk::muted())).truncate().child(folder.display().to_string()))
+            .child(div().text_size(px(tk::T12)).text_color(rgb(tk::ink_soft())).truncate().child(folder.display().to_string()))
             .child(
                 div()
                     .flex()
                     .gap_2()
-                    .child(Button::new("shot-folder").cursor_pointer().secondary().small().label("Change…").on_click(cx.listener(|_, _: &ClickEvent, _, cx| {
+                    .child(Button::new("shot-folder").cursor_pointer().secondary().small().rounded_full().label("Change folder").on_click(cx.listener(|_, _: &ClickEvent, _, cx| {
                         let rx = cx.prompt_for_paths(PathPromptOptions { files: false, directories: true, multiple: false, prompt: Some("Use folder".into()) });
                         cx.spawn(async move |this, cx| {
                             let Ok(Ok(Some(paths))) = rx.await else { return };
@@ -295,156 +273,22 @@ impl Clipper {
                         })
                         .detach();
                     })))
-                    .child(Button::new("shot-reveal").cursor_pointer().ghost().small().label("Show in Finder").on_click(move |_: &ClickEvent, _, cx| {
+                    .child(Button::new("shot-reveal").cursor_pointer().ghost().small().rounded_full().label("Show in folder").on_click(move |_: &ClickEvent, _, cx| {
                         let _ = std::fs::create_dir_all(&folder);
                         cx.reveal_path(&folder)
                     })),
             );
-        let mut strip = div().flex().flex_wrap().gap_2();
-        for (i, (path, thumb)) in self.recent_shots.iter().enumerate() {
-            let picked = self.shot_pick.contains(path);
-            let (open_path, pick_path) = (path.clone(), path.clone());
-            // The check circle picks shots to merge; the picture opens the editor.
-            let check = div()
-                .id(("pick", i))
-                .absolute()
-                .top(px(6.))
-                .right(px(6.))
-                .size(px(20.))
-                .rounded_full()
-                .border_2()
-                .border_color(rgb(0xffffff))
-                .bg(if picked { gpui_kit::Hsla::from(rgb(tk::green())) } else { gpui_kit::hsla(0., 0., 0., 0.35) })
-                .flex()
-                .items_center()
-                .justify_center()
-                .text_size(px(11.))
-                .font_weight(gpui_kit::FontWeight::BOLD)
-                .text_color(rgb(tk::on_green()))
-                .when(picked, |d| d.child("✓"))
-                .cursor_pointer()
-                .tooltip(|w, cx| gpui_kit::component::tooltip::Tooltip::new("Pick to merge").build(w, cx))
-                .on_click(cx.listener(move |c, _: &ClickEvent, _, cx| {
-                    cx.stop_propagation();
-                    if let Some(k) = c.shot_pick.iter().position(|p| *p == pick_path) {
-                        c.shot_pick.remove(k);
-                    } else if c.shot_pick.len() < crate::editor::merge::MAX_IMAGES {
-                        c.shot_pick.push(pick_path.clone());
-                    }
-                    cx.notify();
-                }));
-            strip = strip.child(
-                div()
-                    .id(("recent", i))
-                    .relative()
-                    .flex_none()
-                    .w(px(TILE_W))
-                    .h(px(TILE_H))
-                    .overflow_hidden()
-                    .rounded(px(10.))
-                    .border_2()
-                    .border_color(if picked { gpui_kit::Hsla::from(rgb(tk::green_ink())) } else { crate::ui::hairline() })
-                    .cursor_pointer()
-                    .hover(|d| d.border_color(rgb(tk::text())))
-                    .child(img(thumb.clone()).w(px(TILE_W - 4.)).h(px(TILE_H - 4.)).flex_none().rounded(px(8.)).object_fit(ObjectFit::Cover))
-                    .child(check)
-                    .on_click(move |_: &ClickEvent, _, cx| crate::editor::view::open(open_path.clone(), cx)),
-            );
-        }
-        let merge_bar = (self.shot_pick.len() >= 2).then(|| {
-            let n = self.shot_pick.len();
-            div()
-                .flex()
-                .gap_2()
-                .child(
-                    Button::new("merge-picked")
-                        .cursor_pointer()
-                        .primary()
-                        .small()
-                        .flex_1()
-                        .icon(crate::editor::icons::merge())
-                        .label(format!("Merge {n} images"))
-                        .on_click(cx.listener(|c, _: &ClickEvent, _, cx| {
-                            let picks = std::mem::take(&mut c.shot_pick);
-                            let folder = c.shot.folder.clone();
-                            match crate::editor::view::open_merge(&picks, &folder, cx) {
-                                Ok(_) => c.shot_error = None,
-                                Err(e) => c.shot_error = Some(e.to_string()),
-                            }
-                            c.refresh_recent(cx);
-                            cx.notify();
-                        })),
-                )
-                .child(Button::new("merge-clear").cursor_pointer().ghost().small().label("Clear").on_click(cx.listener(|c, _: &ClickEvent, _, cx| {
-                    c.shot_pick.clear();
-                    cx.notify();
-                })))
-        });
-        let recent = if self.recent_shots.is_empty() {
-            div()
-                .flex()
-                .items_center()
-                .gap_3()
-                .child(img(crate::mascot::image(96)).h(px(44.)).w(px(44. * crate::mascot::aspect())))
-                .child(note("Screenshots you take and images you edit show up here."))
-        } else {
-            div()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .child(strip)
-                .children(merge_bar)
-                .when(self.shot_pick.len() < 2, |d| d.child(note("Tick 2 to 6 shots to merge them into one picture.")))
-        };
-        // Edit an image of your own: drop it here or pick it.
-        let import = div()
-            .id("image-drop")
-            .w_full()
-            .px(px(20.))
-            .py(px(20.))
-            .flex()
-            .flex_col()
-            .items_center()
-            .gap(px(6.))
-            .text_center()
-            .rounded(px(14.))
-            .border_1()
-            .border_dashed()
-            .border_color(crate::ui::hairline_strong())
-            .cursor_pointer()
-            .hover(|d| d.bg(crate::ui::accent_tint()))
-            .drag_over::<gpui_kit::ExternalPaths>(|d, _, _, _| d.bg(crate::ui::accent_tint()).border_color(rgb(tk::green_ink())))
-            .child(div().flex().items_center().gap_2().text_sm().child(crate::editor::icons::image().size(px(16.))).child("Edit an image"))
-            .child(div().text_xs().text_color(rgb(tk::muted())).child("Drop PNG, JPG, HEIC… here, or click to choose"))
-            .on_click(cx.listener(|c, _: &ClickEvent, _, cx| c.choose_images(cx)))
-            .on_drop(cx.listener(|c, paths: &gpui_kit::ExternalPaths, _, cx| c.edit_images(paths.paths().to_vec(), cx)));
-        let import_error = self.shot_error.clone().map(|e| div().text_xs().text_color(rgb(tk::error())).child(e));
-        let busy = self.shot_busy || matches!(self.stage, Stage::Starting | Stage::Recording);
         div()
             .flex()
             .flex_col()
-            .gap_5()
-            .child(
-                // Secondary: Record stays the window's one primary action.
-                Button::new("shot-now").cursor_pointer()
-                    .secondary()
-                    .rounded_full()
-                    .h(px(40.))
-                    .icon(crate::editor::icons::camera())
-                    .label("Take screenshot")
-                    .child(crate::ui::kbd(self.hotkey_config.screenshot.label()))
-                    .disabled(busy)
-                    .on_click(cx.listener(|c, _: &ClickEvent, _, cx| c.take_screenshot(true, cx))),
-            )
-            .child(div().flex().flex_col().gap_2().child(import).children(import_error))
-            .child(crate::section("Mode", modes))
-            .child(crate::section("Delay", delays))
-            .child(crate::section("Pointer", cursor))
+            .gap(px(tk::S4))
+            .child(crate::section("Screenshot mode", modes))
+            .child(crate::section("Screenshot delay", delays))
+            .child(crate::section("Screenshot pointer", cursor))
             .child(crate::section("macOS screenshots", system))
-            .child(crate::section("Save to", folder_row))
-            .child(crate::section("Recent", recent))
+            .child(crate::section("Save screenshots to", folder_row))
             .child(crate::section(
-                "Shortcut",
+                "Screenshot shortcut",
                 div()
                     .flex()
                     .flex_col()
@@ -482,7 +326,7 @@ fn shoot(this: gpui_kit::Entity<Clipper>, s: screenshot::Settings, target: Targe
             match result {
                 Ok((path, display)) => cards::show(path, display, cx),
                 Err(e) => {
-                    let msg = format!("{e}. Check Screen Recording permission in System Settings → Privacy & Security.");
+                    let msg = format!("{e}. Check Screen Recording permission in System Settings, Privacy & Security.");
                     if let Some(d) = capture::display_under_cursor() {
                         cards::show_error(msg, d, cx);
                     }

@@ -34,8 +34,8 @@ impl Ratio {
     /// Where a video of this shape fits.
     pub fn platforms(self) -> &'static str {
         match self {
-            Ratio::Portrait => "TikTok · YouTube Shorts · Instagram Reels · Facebook Reels",
-            Ratio::Landscape => "YouTube · Facebook · LinkedIn · X",
+            Ratio::Portrait => "TikTok, YouTube Shorts, Instagram Reels and Facebook Reels",
+            Ratio::Landscape => "YouTube, Facebook, LinkedIn and X",
         }
     }
 }

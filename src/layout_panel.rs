@@ -11,7 +11,7 @@ use gpui_kit::prelude::*;
 use gpui_kit::{ClickEvent, Div, FontWeight, ObjectFit, div, img, px, rgb};
 
 /// Webcam border colors.
-const BORDER_COLORS: [u32; 5] = [0xffffff, 0x0a0a0b, 0xa4f47c, 0x22d3ee, 0xf472b6];
+const BORDER_COLORS: [u32; 5] = tk::content::CAM_BORDER;
 
 impl Clipper {
     pub(crate) fn layout_panel(&self, cx: &mut Context<Self>) -> Div {
@@ -78,27 +78,27 @@ impl Clipper {
                                 .h(px(fh))
                                 .rounded(px(4.))
                                 .border_2()
-                                .border_color(rgb(if selected { tk::green_ink() } else { tk::muted() })),
+                                .border_color(rgb(if selected { tk::selected() } else { tk::ink_soft() })),
                         )
                         .child(
                             div()
                                 .flex()
                                 .flex_col()
-                                .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(ratio.title()))
-                                .child(div().text_xs().text_color(rgb(tk::muted())).child(ratio.label())),
+                                .child(div().text_size(px(tk::T13)).font_weight(FontWeight::SEMIBOLD).child(ratio.title()))
+                                .child(div().text_size(px(tk::T12)).text_color(rgb(tk::ink_soft())).child(ratio.label())),
                         ),
                 )
                 .child(
                     div()
                         .w_full()
                         .whitespace_normal()
-                        .text_xs()
-                        .text_color(rgb(tk::muted()))
+                        .text_size(px(tk::T12))
+                        .text_color(rgb(tk::ink_soft()))
                         .line_height(px(16.))
                         .child(format!("For {}", ratio.platforms())),
                 )
-                .child(div().mt_auto().pt_1().border_t_1().border_color(rgb(tk::line())).text_xs().font_weight(FontWeight::BOLD).text_color(
-                    rgb(if selected { tk::green_ink() } else { tk::text() }),
+                .child(div().mt_auto().pt_1().border_t_1().border_color(rgb(tk::stone())).text_size(px(tk::T12)).font_weight(FontWeight::BOLD).text_color(
+                    rgb(if selected { tk::selected() } else { tk::text() }),
                 ).child(format!("{w} × {h}")))
         });
         let resolution = crate::ui::segmented(
@@ -149,19 +149,19 @@ impl Clipper {
             .w_full()
             .h(px(150.))
             .rounded(px(16.))
-            .bg(rgb(tk::card()))
+            .bg(rgb(tk::mist()))
             .border_1()
-            .border_color(rgb(tk::line()))
+            .border_color(rgb(tk::stone()))
             .overflow_hidden()
             .flex()
             .items_center()
             .justify_center()
-            .text_xs()
-            .text_color(rgb(tk::muted()))
+            .text_size(px(tk::T12))
+            .text_color(rgb(tk::ink_soft()))
             .map(|d| match &self.live_frame {
                 Some(frame) => d.child(img(frame.frame.clone()).size_full().object_fit(ObjectFit::Cover).rounded(px(16.))),
                 None if self.live.failed() => d.child("Camera unavailable"),
-                None => d.child("Starting camera…"),
+                None => d.child("Starting the camera..."),
             });
         let devices_note = if self.cam_devices.is_empty() { Some("No camera found.") } else { None };
         div()
@@ -173,7 +173,7 @@ impl Clipper {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .child(div().text_sm().font_weight(FontWeight::MEDIUM).child("Record webcam"))
+                    .child(div().text_size(px(tk::T13)).font_weight(FontWeight::MEDIUM).child("Record webcam"))
                     .child(toggle),
             )
             .when(on, |d| {
@@ -228,7 +228,7 @@ impl Clipper {
             .child(grid(4).children(tiles))
             .child(note(&match current {
                 _ if !has => "Turn on the webcam to see it in the layout.".to_string(),
-                Placement::Split(_) => format!("{} · screen gets the rest", current.label()),
+                Placement::Split(_) => format!("{}, the screen gets the rest", current.label()),
                 p => p.label(),
             }))
     }
@@ -246,7 +246,7 @@ impl Clipper {
                         .p(px(2.))
                         .rounded(px(9.))
                         .border_2()
-                        .border_color(rgb(if selected { tk::text() } else { tk::card() }))
+                        .border_color(rgb(if selected { tk::text() } else { tk::mist() }))
                         .cursor_pointer()
                         .child(div().size_full().rounded(px(6.)).border_1().border_color(rgb(tk::pressed())).bg(rgb(v)))
                         .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
@@ -270,7 +270,7 @@ impl Clipper {
                         .child(self.knob(Knob::CamSize, "Size", cx))
                         .child(self.knob(Knob::CamMargin, "Margin", cx))
                         .child(self.knob(Knob::CamBorder, "Border", cx))
-                        .child(div().flex().items_center().justify_between().child(div().text_sm().child("Border color")).child(colors))
+                        .child(div().flex().items_center().justify_between().child(div().text_size(px(tk::T13)).child("Border color")).child(colors))
                         .child(shadow),
                 )
             }
@@ -296,9 +296,9 @@ impl Clipper {
 
 /// A mini canvas showing where the webcam goes.
 fn thumb(p: Placement, w: f32, h: f32, selected: bool, split: f32) -> Div {
-    let accent = rgb(if selected { tk::green_ink() } else { tk::muted() });
+    let accent = rgb(if selected { tk::selected() } else { tk::ink_soft() });
     let screen = rgb(tk::pressed());
-    let canvas = div().relative().w(px(w)).h(px(h)).rounded(px(5.)).bg(rgb(tk::card())).border_1().border_color(rgb(tk::line()));
+    let canvas = div().relative().w(px(w)).h(px(h)).rounded(px(5.)).bg(rgb(tk::mist())).border_1().border_color(rgb(tk::stone()));
     let pad = 3.0;
     match p {
         Placement::None => canvas.child(
@@ -332,7 +332,7 @@ fn thumb(p: Placement, w: f32, h: f32, selected: bool, split: f32) -> Div {
                         .size(px(d))
                         .bg(accent)
                         .border_1()
-                        .border_color(rgb(tk::on_green()))
+                        .border_color(rgb(tk::on_selected()))
                         .map(|d2| if shape == Shape::Circle { d2.rounded_full() } else { d2.rounded(px(d * 0.25)) }),
                 )
         }

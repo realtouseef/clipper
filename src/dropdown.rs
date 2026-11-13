@@ -109,13 +109,13 @@ impl Dropdown {
                 .justify_between()
                 .gap_2()
                 .rounded(px(10.))
-                .text_sm()
-                .text_color(rgb(if selected { tk::text() } else { tk::text_soft() }))
+                .text_size(px(tk::T13))
+                .text_color(rgb(if selected { tk::text() } else { tk::text() }))
                 .when(selected, |d| d.font_weight(FontWeight::MEDIUM))
                 .cursor_pointer()
                 .hover(|s| s.bg(rgb(tk::hover())).text_color(rgb(tk::text())))
                 .child(div().min_w_0().truncate().child(label.clone()))
-                .when(selected, |d| d.child(Icon::new(IconName::Check).size_4().text_color(rgb(tk::green_ink()))))
+                .when(selected, |d| d.child(Icon::new(IconName::Check).size_4().text_color(rgb(tk::selected()))))
                 .on_click(cx.listener(move |this, _, _, cx| this.pick(i, cx)))
         });
         div()
@@ -130,7 +130,7 @@ impl Dropdown {
             .max_h(px(300.))
             .overflow_y_scroll()
             .rounded(px(14.))
-            .bg(rgb(tk::card()))
+            .bg(rgb(tk::mist()))
             .border_1()
             .border_color(rgb(tk::pressed()))
             .shadow(vec![BoxShadow {
@@ -164,8 +164,8 @@ impl Render for Dropdown {
             .rounded(px(12.))
             .bg(rgb(tk::raised()))
             .border_1()
-            .border_color(rgb(if open { tk::green_ink() } else { tk::raised() }))
-            .text_sm()
+            .border_color(rgb(if open { tk::selected() } else { tk::raised() }))
+            .text_size(px(tk::T13))
             .when(disabled, |d| d.opacity(0.5))
             .when(!disabled, |d| d.cursor_pointer().hover(|s| s.bg(rgb(tk::hover()))))
             .child(canvas(move |b, _, _| store.set(b), |_, _, _, _| {}).absolute().size_full())
@@ -173,13 +173,13 @@ impl Render for Dropdown {
                 div()
                     .min_w_0()
                     .truncate()
-                    .text_color(rgb(if has_value { tk::text() } else { tk::muted() }))
+                    .text_color(rgb(if has_value { tk::text() } else { tk::ink_soft() }))
                     .child(label.unwrap_or_else(|| self.placeholder.clone())),
             )
             .child(
                 Icon::new(if open { IconName::ChevronUp } else { IconName::ChevronDown })
                     .size_4()
-                    .text_color(rgb(if open { tk::green_ink() } else { tk::muted() })),
+                    .text_color(rgb(if open { tk::selected() } else { tk::ink_soft() })),
             )
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_click(cx.listener(|this, _, _, cx| this.toggle(cx)));

@@ -13,12 +13,13 @@ struct Entry {
     license: &'static str,
 }
 
-const ENTRIES: [Entry; 6] = [
+const ENTRIES: [Entry; 7] = [
+    Entry { name: "Figtree", what: "Interface font by Erik D. Kennedy, SIL Open Font License 1.1", license: include_str!("../assets/fonts/Figtree-OFL.txt") },
     Entry { name: "FFmpeg", what: "Video encoding (the bundled ffmpeg and ffprobe programs), GNU GPL v3; source links below", license: include_str!("../assets/licenses/FFmpeg.txt") },
-    Entry { name: "uiGradients", what: "Gradient presets (github.com/ghosh/uiGradients), MIT", license: include_str!("../assets/gradients/uiGradients-LICENSE.txt") },
-    Entry { name: "WebGradients", what: "Gradient presets (github.com/itmeo/webgradients), MIT", license: include_str!("../assets/gradients/WebGradients-LICENSE.txt") },
+    Entry { name: "uiGradients", what: "Gradient data kept for migrating old favorites (github.com/ghosh/uiGradients), MIT", license: include_str!("../assets/gradients/uiGradients-LICENSE.txt") },
+    Entry { name: "WebGradients", what: "Gradient data kept for migrating old favorites (github.com/itmeo/webgradients), MIT", license: include_str!("../assets/gradients/WebGradients-LICENSE.txt") },
     Entry { name: "Noto Color Emoji", what: "Emoji font, SIL Open Font License 1.1", license: include_str!("../assets/fonts/NotoColorEmoji-LICENSE.txt") },
-    Entry { name: "Poppins", what: "Text font, SIL Open Font License 1.1", license: include_str!("../assets/fonts/OFL.txt") },
+    Entry { name: "Poppins", what: "Caption and annotation font, SIL Open Font License 1.1", license: include_str!("../assets/fonts/OFL.txt") },
     Entry { name: "Lucide", what: "Icons, ISC License", license: include_str!("../assets/icons/editor/LICENSE-LUCIDE") },
 ];
 
@@ -33,7 +34,7 @@ impl Render for Credits {
                 .items_center()
                 .gap_3()
                 .child(gpui_kit::img(crate::mascot::image(120)).h(px(52.)).w(px(52. * crate::mascot::aspect())))
-                .child(div().flex().flex_col().child(div().text_xl().font_weight(FontWeight::BOLD).child("Credits")).child(div().text_xs().text_color(rgb(tk::muted())).child("Clipper is made with these open-source works."))),
+                .child(div().flex().flex_col().child(div().text_size(px(tk::T24)).font_weight(FontWeight::BOLD).child("Credits")).child(div().text_size(px(tk::T12)).text_color(rgb(tk::ink_soft())).child("Clipper is made with these open-source works."))),
         );
         for e in &ENTRIES {
             col = col.child(
@@ -41,23 +42,23 @@ impl Render for Credits {
                     .flex()
                     .flex_col()
                     .gap(px(ui::S2))
-                    .child(div().text_base().font_weight(FontWeight::SEMIBOLD).child(e.name))
-                    .child(div().text_xs().text_color(rgb(tk::muted())).child(e.what))
+                    .child(div().text_size(px(tk::T15)).font_weight(FontWeight::SEMIBOLD).child(e.name))
+                    .child(div().text_size(px(tk::T12)).text_color(rgb(tk::ink_soft())).child(e.what))
                     .child(
                         div()
                             .p(px(ui::S3))
                             .rounded(px(10.))
-                            .bg(rgb(tk::card()))
+                            .bg(rgb(tk::mist()))
                             .border_1()
                             .border_color(ui::hairline())
-                            .text_xs()
+                            .text_size(px(tk::T12))
                             .line_height(px(17.))
-                            .text_color(rgb(tk::text_soft()))
+                            .text_color(rgb(tk::text()))
                             .child(e.license.trim().to_string()),
                     ),
             );
         }
-        div().id("credits").size_full().bg(rgb(tk::bg())).text_color(rgb(tk::text())).overflow_y_scrollbar().child(col)
+        div().id("credits").size_full().bg(rgb(tk::paper())).text_color(rgb(tk::text())).overflow_y_scrollbar().child(col)
     }
 }
 

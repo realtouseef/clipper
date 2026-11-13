@@ -11,7 +11,7 @@ use crate::Clipper;
 use gpui_kit::prelude::*;
 use gpui_kit::{
     AnyWindowHandle, App, Entity, FontWeight, MouseButton, MouseDownEvent, MouseMoveEvent, ObjectFit, RenderImage, Window,
-    WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions, div, hsla, img, point, px, rgb, size,
+    WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions, div, img, point, px, rgb, size,
 };
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -156,7 +156,7 @@ impl Render for CamBubble {
         }
 
         let label = |text: &'static str| {
-            div().size_full().flex().flex_col().items_center().justify_center().gap_2().text_xs().font_weight(FontWeight::MEDIUM).text_color(rgb(tk::muted()))
+            div().size_full().flex().flex_col().items_center().justify_center().gap_2().text_size(px(tk::T12)).font_weight(FontWeight::MEDIUM).text_color(rgb(tk::ink_soft()))
                 .child(crate::editor::icons::camera().size(px(22.)))
                 .child(text)
         };
@@ -164,8 +164,8 @@ impl Render for CamBubble {
             (_, false) => label("Camera off").into_any_element(),
             // The image is rounded itself: element clipping is rectangular.
             (Some(f), true) => img(f.clone()).size_full().rounded_full().object_fit(ObjectFit::Cover).into_any_element(),
-            (None, true) if self.failures >= 3 => label("Reconnecting camera…").into_any_element(),
-            (None, true) => label("Starting camera…").into_any_element(),
+            (None, true) if self.failures >= 3 => label("Reconnecting the camera...").into_any_element(),
+            (None, true) => label("Starting the camera...").into_any_element(),
         };
         let dragging = self.drag.is_some();
         div().size_full().p(px(PAD)).child(
@@ -174,11 +174,11 @@ impl Render for CamBubble {
                 .size(px(D))
                 .rounded_full()
                 .overflow_hidden()
-                .bg(rgb(tk::card()))
+                .bg(rgb(tk::mist()))
                 .border_2()
-                .border_color(hsla(0., 0., 1.0, if dragging { 0.5 } else { 0.22 }))
+                .border_color(tk::alpha(tk::WHITE, if dragging { 0.5 } else { 0.22 }))
                 .shadow(vec![gpui_kit::BoxShadow {
-                    color: hsla(0., 0., 0., 0.35),
+                    color: tk::scrim(0.35),
                     offset: point(px(0.), px(3.)),
                     blur_radius: px(8.),
                     spread_radius: px(0.),

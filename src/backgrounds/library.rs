@@ -184,7 +184,36 @@ pub fn global() -> &'static Mutex<Library> {
 impl Library {
     pub fn open(dir: PathBuf) -> Self {
         let data = std::fs::read_to_string(dir.join("library.json")).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
-        Self { dir, data }
+        let mut lib = Self { dir, data };
+        if lib.migrate_removed_presets() {
+            lib.save();
+        }
+        lib
+    }
+
+    /// Favorites that point at a gradient preset that no longer ships become saved gradients
+    /// ("Mine") with the same stops, so nothing the user kept disappears. Returns whether
+    /// anything changed.
+    pub fn migrate_removed_presets(&mut self) -> bool {
+        let kept: Vec<&str> = super::presets::gradients().iter().map(|p| p.id.as_str()).collect();
+        let mut changed = false;
+        for fav in self.data.favorites.clone() {
+            if kept.contains(&fav.as_str()) || self.data.gradients.iter().any(|g| g.id == fav) || self.data.images.iter().any(|e| e.id == fav) {
+                continue;
+            }
+            let Some((name, gradient)) = super::presets::legacy(&fav) else { continue };
+            let id = format!("mine:{}", fav.replace(':', "-"));
+            if !self.data.gradients.iter().any(|g| g.id == id) {
+                self.data.gradients.push(SavedGradient { id: id.clone(), name, gradient });
+            }
+            for f in &mut self.data.favorites {
+                if *f == fav {
+                    *f = id.clone();
+                }
+            }
+            changed = true;
+        }
+        changed
     }
 
     fn save(&self) {
@@ -436,5 +465,33 @@ mod tests {
         assert!(lib.images().iter().all(|e| e.source.as_deref().and_then(Path::parent) != Some(watch.as_path())));
         assert!(lib.import(&root.join("nope.gif")).is_err());
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A favorite of a removed preset becomes a "Mine" gradient with identical stops, and a
+    /// project that stored that gradient renders exactly as before.
+    #[test]
+    fn removed_preset_favorites_move_to_mine_and_render_the_same() {
+        let dir = std::env::temp_dir().join(format!("clipper-bglib-mig-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        // Dawn (the old default, removed), a WebGradients preset, and a kept preset.
+        let kept = crate::backgrounds::presets::gradients()[0].id.clone();
+        let json = format!("{{\"images\":[],\"favorites\":[\"app:0\",\"wg:001\",\"{kept}\"],\"gradients\":[],\"recent\":[],\"watched\":null}}");
+        std::fs::write(dir.join("library.json"), json).unwrap();
+        let lib = Library::open(dir.clone());
+        let mine = lib.saved_gradients();
+        assert_eq!(mine.len(), 2, "{mine:?}");
+        let dawn = mine.iter().find(|g| g.name == "Dawn").unwrap();
+        assert!(lib.is_favorite(&dawn.id) && lib.is_favorite(&kept));
+        // The old default as a project stored it (stops inline) renders pixel for pixel the
+        // same as the migrated gradient.
+        let old_project = r#"{"Gradient":{"kind":{"Linear":{"angle":112.0}},"stops":[{"pos":0.09,"color":[114,167,232]},{"pos":0.44,"color":[253,129,82]},{"pos":0.55,"color":[253,129,82]},{"pos":0.86,"color":[249,202,86]}],"grain":0.0}}"#;
+        let bg: crate::backgrounds::Background = serde_json::from_str(old_project).unwrap();
+        let crate::backgrounds::Background::Gradient(g) = bg else { panic!() };
+        assert_eq!(crate::backgrounds::render::gradient(&g, 64, 48), crate::backgrounds::render::gradient(&dawn.gradient, 64, 48));
+        // Saved to disk: reopening doesn't migrate twice.
+        let again = Library::open(dir.clone());
+        assert_eq!(again.saved_gradients().len(), 2);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

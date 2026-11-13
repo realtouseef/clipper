@@ -15,7 +15,7 @@ use crate::dropdown::{Dropdown, DropdownEvent};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{ActiveTheme, Sizable};
 use gpui_kit::prelude::*;
-use gpui_kit::{Entity, FontWeight, SharedString, Subscription, Task, Window, div, rgb};
+use gpui_kit::{px, Entity, FontWeight, SharedString, Subscription, Task, Window, div, rgb};
 use std::io::{BufReader, Read};
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
@@ -158,7 +158,7 @@ impl Render for MicSettings {
         let note = if !self.enabled {
             Some("Recording without audio")
         } else if failed {
-            Some("Can't open the microphone. Check Microphone permission in System Settings → Privacy & Security.")
+            Some("Can't open the microphone. Check Microphone permission in System Settings, Privacy & Security.")
         } else if missing {
             Some("Picked microphone isn't connected; the system default will be used.")
         } else {
@@ -175,7 +175,7 @@ impl Render for MicSettings {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .child(div().text_sm().font_weight(FontWeight::MEDIUM).child("Microphone"))
+                    .child(div().text_size(px(tk::T13)).font_weight(FontWeight::MEDIUM).child("Microphone"))
                     .child(
                         Switch::new("mic-enabled").cursor_pointer()
                             .checked(self.enabled)
@@ -191,17 +191,17 @@ impl Render for MicSettings {
                     .flex()
                     .items_center()
                     .gap_3()
-                    .child(div().flex_none().text_xs().text_color(muted_fg).child("Level"))
+                    .child(div().flex_none().text_size(px(tk::T12)).text_color(muted_fg).child("Level"))
                     .child(
                         div().flex_1().child(
                             Progress::new("mic-level")
                                 .value(if self.enabled { self.level * 100.0 } else { 0.0 })
-                                .color(rgb(if self.level > 0.95 { tk::red() } else { tk::green() }))
+                                .color(rgb(if self.level > 0.95 { tk::error_text() } else { tk::selected() }))
                                 .accessibility_label("Microphone input level"),
                         ),
                     ),
             )
-            .when_some(note, |d, note| d.child(div().text_xs().text_color(muted_fg).child(note)))
+            .when_some(note, |d, note| d.child(div().text_size(px(tk::T12)).text_color(muted_fg).child(note)))
     }
 }
 

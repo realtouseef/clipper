@@ -20,6 +20,7 @@ mod export;
 mod export_dialog;
 mod formats;
 mod frames;
+mod home;
 mod hotkeys;
 mod knob;
 mod layout;
@@ -56,7 +57,8 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::progress::Progress;
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::spinner::Spinner;
-use gpui_kit::component::{ActiveTheme, Selectable, Sizable};
+use gpui_kit::component::{ActiveTheme, Disableable, Selectable, Sizable};
+use gpui_kit::AnimationExt;
 use gpui_kit::prelude::*;
 use gpui_kit::{
     AnyWindowHandle, App, Bounds, ClickEvent, Div, FocusHandle, FontWeight, Hsla, MouseButton, Pixels,
@@ -73,16 +75,12 @@ use std::sync::atomic::Ordering;
 use std::sync::atomic::AtomicU32;
 use std::time::{Duration, Instant};
 
-const R_CARD: f32 = 24.0;
-const GAP: f32 = 10.0;
-const HEADER_H: f32 = 52.0;
-const PANEL_W: f32 = 320.0;
-/// The vertical tab rail right of the settings panel.
-const RAIL_W: f32 = 76.0;
-
-// Squircle-like radii (GPUI draws circular-arc corners; large radii read as soft squircles).
-const R_BIG: f32 = 28.0;
-const R_MID: f32 = 14.0;
+// Shell sizes, all from the theme tokens.
+const R_CARD: f32 = tk::R_STAGE;
+const GAP: f32 = tk::S4;
+const HEADER_H: f32 = tk::HEADER_H;
+const PANEL_W: f32 = tk::PANEL_W;
+const R_MID: f32 = tk::R_CONTROL;
 
 fn c(hex: u32) -> Hsla {
     rgb(hex).into()
@@ -116,23 +114,29 @@ enum Stage {
     Error(String),
 }
 
-/// Tabs of the settings panel.
+/// Which screen the main window shows while no recording is open (`Stage::Idle`): the
+/// Library, or the recording setup. Every other stage is the editor.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Screen {
+    Library,
+    Studio,
+}
+
+/// Tabs of the settings panel (a pill row at its top).
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Panel {
+    Scene,
     /// Output format and webcam layout.
     Layout,
-    Scene,
     /// Zoom regions and camera follow.
     Zoom,
     Captions,
-    /// Source, audio and export settings.
+    /// Source, audio, export and screenshot settings.
     Output,
-    /// Screenshot settings and recent screenshots.
-    Shots,
 }
 
 impl Panel {
-    const ALL: [Panel; 6] = [Panel::Layout, Panel::Scene, Panel::Zoom, Panel::Captions, Panel::Output, Panel::Shots];
+    const ALL: [Panel; 5] = [Panel::Scene, Panel::Layout, Panel::Zoom, Panel::Captions, Panel::Output];
 
     fn label(self) -> &'static str {
         match self {
@@ -141,25 +145,24 @@ impl Panel {
             Panel::Captions => "Captions",
             Panel::Zoom => "Zoom",
             Panel::Output => "Output",
-            Panel::Shots => "Shots",
-        }
-    }
-
-    fn icon(self) -> gpui_kit::component::Icon {
-        use editor::icons;
-        match self {
-            Panel::Layout => icons::layout(),
-            Panel::Scene => icons::background(),
-            Panel::Zoom => icons::zoom(),
-            Panel::Captions => icons::captions(),
-            Panel::Output => icons::settings(),
-            Panel::Shots => icons::camera(),
         }
     }
 }
 
 struct Clipper {
     stage: Stage,
+    /// Library or recording setup, while `Idle`.
+    screen: Screen,
+    /// The start screen.
+    library: gpui_kit::Entity<home::Library>,
+    /// "Discard changes" asked; the confirm dialog is up.
+    confirm_discard: bool,
+    /// The "…" menu or the shortcuts popover in the header.
+    header_menu: HeaderMenu,
+    /// The project name in the header (the recording's folder name; renaming moves it).
+    name_input: gpui_kit::Entity<gpui_kit::component::input::InputState>,
+    /// A name to put in `name_input` on the next render (setting it needs the window).
+    name_sync: Option<String>,
     recorder: Option<Recorder>,
     recording: Option<Arc<Recording>>,
     preview: Option<Preview>,
@@ -263,6 +266,10 @@ struct Clipper {
     /// Timeline zoom (1 = the whole clip fits) and horizontal scroll (px).
     tl_zoom: f32,
     tl_scroll: f32,
+    /// The timeline shows only its toolbar.
+    tl_collapsed: bool,
+    /// The settings panel is hidden (the stage takes the room).
+    panel_hidden: bool,
     /// "Reset all edits" asked; waiting for the confirmation click.
     confirm_reset: bool,
     /// Full-rate frames around the playhead, and whether the preview shows one (rather
@@ -293,16 +300,22 @@ struct Clipper {
     shot_busy: bool,
     /// Why an image couldn't be opened for editing.
     shot_error: Option<String>,
-    /// Recent shots picked for merging.
-    shot_pick: Vec<PathBuf>,
     /// Watches for macOS's own screenshots (⌘⇧3/4/5).
     system_shots: Option<screenshot::watch::Watcher>,
     system_poll: Instant,
     shot_hotkey: Option<hotkeys::Registration>,
-    recent_shots: Vec<(PathBuf, Arc<gpui_kit::RenderImage>)>,
+
     _ticker: Task<()>,
     _job: Option<Task<()>>,
     _subs: Vec<Subscription>,
+}
+
+/// What's open from the editor header.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum HeaderMenu {
+    None,
+    More,
+    Shortcuts,
 }
 
 /// Values behind the settings panel (sliders write here; preview, camera and export read).
@@ -406,8 +419,28 @@ impl Clipper {
             let _ = this.update(cx, |this, cx| this.set_cam_devices(devices, cx));
         })
         .detach();
+        let weak = cx.weak_entity();
+        let hotkey_config = hotkeys::load();
+        let shot = screenshot::Settings::load();
+        let out_dir = export::load_export_dir();
+        let library = {
+            let (e, p, k) = (out_dir.clone(), shot.folder.clone(), hotkey_config.screenshot.label().to_string());
+            cx.new(|cx| home::Library::new(weak, e, p, k, window, cx))
+        };
+        let name_input = cx.new(|cx| gpui_kit::component::input::InputState::new(window, cx));
+        subs.push(cx.subscribe(&name_input, |this, _, ev: &gpui_kit::component::input::InputEvent, cx| {
+            if matches!(ev, gpui_kit::component::input::InputEvent::PressEnter { .. } | gpui_kit::component::input::InputEvent::Blur) {
+                this.rename_project(cx);
+            }
+        }));
         Self {
             stage: Stage::Idle,
+            screen: Screen::Library,
+            library,
+            confirm_discard: false,
+            header_menu: HeaderMenu::None,
+            name_input,
+            name_sync: None,
             recorder: None,
             recording: None,
             preview: None,
@@ -457,9 +490,12 @@ impl Clipper {
             empty_frame: canvas_preview::to_render_image(image::RgbaImage::from_pixel(
                 1,
                 1,
-                image::Rgba([0x2c, 0x2c, 0x2e, 0xff]),
+                {
+                    let m = tk::mist();
+                    image::Rgba([(m >> 16) as u8, (m >> 8) as u8, m as u8, 0xff])
+                },
             )),
-            out_dir: export::load_export_dir(),
+            out_dir,
             zooms: Vec::new(),
             motion,
             selected: None,
@@ -474,13 +510,15 @@ impl Clipper {
             waveform: None,
             tl_zoom: 1.0,
             tl_scroll: 0.0,
+            tl_collapsed: false,
+            panel_hidden: false,
             confirm_reset: false,
             frame_cache: None,
             showing_exact: true,
             playhead: 0.0,
             playing: false,
             last_tick: Instant::now(),
-            panel: Panel::Layout,
+            panel: Panel::Scene,
             gesture: timeline::Gesture::None,
             picker_bounds: Rc::new(Cell::new(Bounds::default())),
             focus: cx.focus_handle(),
@@ -488,16 +526,14 @@ impl Clipper {
             mic: cx.new(|cx| MicSettings::new(window, cx)),
             main_window,
             bar: None,
-            hotkey_config: hotkeys::load(),
+            hotkey_config,
             hotkeys: None,
-            shot: screenshot::Settings::load(),
+            shot,
             shot_busy: false,
-            shot_pick: Vec::new(),
             shot_error: None,
             system_shots: None,
             system_poll: Instant::now(),
             shot_hotkey: None,
-            recent_shots: Vec::new(),
             _ticker: ticker,
             _job: None,
             _subs: subs,
@@ -586,7 +622,7 @@ impl Clipper {
                     self.recorder = None;
                     self.end_session(cx);
                     self.stage = Stage::Error(format!(
-                        "Screen capture stopped.\nCheck Screen Recording permission in System Settings → Privacy & Security.\n\n{e}"
+                        "Screen capture stopped.\nCheck Screen Recording permission in System Settings, Privacy & Security.\n\n{e}"
                     ));
                 }
                 cx.notify();
@@ -633,7 +669,7 @@ impl Clipper {
             webcam::LivePreview::Running(l) => {
                 if l.failed() {
                     self.live = webcam::LivePreview::Failed;
-                    self.cam_notice = Some("Can't open the camera. Check Camera permission in System Settings → Privacy & Security.".into());
+                    self.cam_notice = Some("Can't open the camera. Check Camera permission in System Settings, Privacy & Security.".into());
                 }
             }
             webcam::LivePreview::Off => {
@@ -986,6 +1022,8 @@ impl Clipper {
         self.playing = true;
         self.panel = Panel::Zoom;
         self.stage = Stage::Review;
+        self.screen = Screen::Studio;
+        self.name_sync = self.recording.as_ref().and_then(|r| r.dir.file_name().map(|n| n.to_string_lossy().to_string()));
         self.cap_art = None;
         let have_captions = captions.is_some();
         self.captions = captions;
@@ -1071,9 +1109,113 @@ impl Clipper {
         self.playhead = 0.0;
         self.playing = false;
         self.gesture = timeline::Gesture::None;
-        self.panel = Panel::Layout;
+        self.panel = Panel::Scene;
         self.stage = Stage::Idle;
+        self.confirm_discard = false;
+        self.header_menu = HeaderMenu::None;
+        self.go_library(cx);
         cx.notify();
+    }
+
+    /// The header's name was edited: move the recording's folder to the new name and reopen
+    /// it there (its edits are already saved in the folder).
+    fn rename_project(&mut self, cx: &mut Context<Self>) {
+        let Some(rec) = self.recording.clone().filter(|_| matches!(self.stage, Stage::Review)) else { return };
+        let name = self.name_input.read(cx).value().trim().to_string();
+        let current = rec.dir.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+        if name.is_empty() || name == current {
+            return;
+        }
+        self.reset(false, cx);
+        match home::rename_item(&rec.dir, &name) {
+            Ok(dir) => self.open_session(dir, false, cx),
+            Err(e) => {
+                self.open_session(rec.dir.clone(), false, cx);
+                eprintln!("Clipper: rename failed: {e}");
+            }
+        }
+    }
+
+    /// Shows the Library (and re-reads its folders).
+    fn go_library(&mut self, cx: &mut Context<Self>) {
+        self.screen = Screen::Library;
+        self.refresh_library(cx);
+        cx.notify();
+    }
+
+    /// Re-reads the Library's folders (after a save, export, delete or folder change).
+    pub(crate) fn refresh_library(&mut self, cx: &mut Context<Self>) {
+        let (e, p) = (self.out_dir.clone(), self.shot.folder.clone());
+        self.library.update(cx, |l, cx| {
+            l.set_folders(e, p);
+            l.refresh(cx);
+        });
+    }
+
+    /// Create → Record screen: the recording setup.
+    pub(crate) fn show_studio(&mut self, cx: &mut Context<Self>) {
+        if matches!(self.stage, Stage::Idle) {
+            self.screen = Screen::Studio;
+            cx.notify();
+        }
+    }
+
+    /// The header's back arrow: leave the editor (edits are already saved next to the
+    /// recording) or the setup, for the Library.
+    fn back_to_library(&mut self, cx: &mut Context<Self>) {
+        match self.stage {
+            Stage::Review | Stage::Error(_) => self.reset(false, cx),
+            Stage::Idle => self.go_library(cx),
+            _ => {}
+        }
+    }
+
+    /// Opens a saved recording (raw.mp4, cursor.csv, webcam.mp4, captions.json) in the
+    /// editor, loading off the UI thread. With `export`, the Export dialog opens once ready.
+    pub(crate) fn open_session(&mut self, dir: PathBuf, export: bool, cx: &mut Context<Self>) {
+        if !matches!(self.stage, Stage::Idle) {
+            return;
+        }
+        self.screen = Screen::Studio;
+        self.stage = Stage::Processing;
+        cx.notify();
+        let job = cx.background_executor().spawn(async move {
+            let raw = dir.join("raw.mp4");
+            let (width, height, duration) = recorder::probe(&raw)?;
+            let samples = std::fs::read_to_string(dir.join("cursor.csv"))
+                .unwrap_or_default()
+                .lines()
+                .skip(1)
+                .filter_map(|l| {
+                    let v: Vec<&str> = l.split(',').collect();
+                    Some(cursor::Sample { t: v.first()?.parse().ok()?, x: v.get(1)?.parse().ok()?, y: v.get(2)?.parse().ok()?, down: *v.get(3)? == "1" })
+                })
+                .collect();
+            let cam = dir.join("webcam.mp4");
+            let webcam = recorder::probe(&cam).ok().map(|(w, h, _)| webcam::Track { path: cam, width: w, height: h, spans: vec![(0.0, duration)] });
+            let rec = Recording { dir: dir.clone(), raw, width, height, duration, samples, webcam, px_per_pt: 2.0 };
+            let preview = export::build_preview(&rec)?;
+            let track = audio::decode(&rec).ok().flatten();
+            let caps = captions::Captions::load(&dir);
+            anyhow::Ok((rec, preview, track, caps))
+        });
+        cx.spawn(async move |this, cx| {
+            let res = job.await;
+            let _ = this.update(cx, |c, cx| {
+                match res {
+                    Ok((rec, preview, track, caps)) => {
+                        c.show_recording(rec, preview, track, caps, cx);
+                        c.playing = false;
+                        if export {
+                            c.open_export(cx);
+                        }
+                    }
+                    Err(e) => c.stage = Stage::Error(format!("Couldn't open this recording: {e}. Its raw.mp4 may be missing or damaged; use Show in folder to check.")),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     // ---------- preview (center) ----------
@@ -1081,7 +1223,8 @@ impl Clipper {
     /// The composited 9:16 output, centered on the light stage.
     fn preview_pane(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
         let vp = window.viewport_size();
-        let area_w = f32::from(vp.width) - PANEL_W - RAIL_W - GAP * 4.0 - 48.0;
+        let panel = if self.panel_hidden { 0.0 } else { PANEL_W + GAP };
+        let area_w = f32::from(vp.width) - panel - GAP * 2.0 - tk::S6 * 2.0;
         let area_h = f32::from(vp.height) - HEADER_H - self.timeline_height() - GAP * 2.0 - 48.0;
         let (ow, oh) = self.layout.canvas();
         let aspect = ow as f32 / oh as f32;
@@ -1093,7 +1236,7 @@ impl Clipper {
             .min_w_0()
             .h_full()
             .rounded(px(R_CARD))
-            .bg(rgb(tk::card()))
+            .bg(rgb(tk::mist()))
             .flex()
             .flex_col()
             .items_center()
@@ -1297,9 +1440,9 @@ impl Clipper {
 
         let status = match self.stage {
             _ if playing => None,
-            Stage::Starting => Some(("Starting…", true)),
-            Stage::Recording => Some(("Recording…", false)),
-            Stage::Processing => Some(("Preparing preview…", true)),
+            Stage::Starting => Some(("Starting...", true)),
+            Stage::Recording => Some(("Recording...", false)),
+            Stage::Processing => Some(("Preparing the preview...", true)),
             Stage::Error(_) => Some(("Something went wrong", false)),
             _ => Some(("Preview appears after recording", false)),
         };
@@ -1318,8 +1461,8 @@ impl Clipper {
                 .size(px(d))
                 .rounded(px(c.radius as f32 * k))
                 .border_2()
-                .border_color(if dragging { gpui_kit::hsla(0., 0., 1.0, 0.7) } else { gpui_kit::transparent_black() })
-                .hover(|s| s.border_color(gpui_kit::hsla(0., 0., 1.0, 0.45)))
+                .border_color(if dragging { tk::alpha(tk::WHITE, 0.7) } else { gpui_kit::transparent_black() })
+                .hover(|s| s.border_color(tk::alpha(tk::WHITE, 0.45)))
                 .cursor(if dragging { gpui_kit::CursorStyle::ClosedHand } else { gpui_kit::CursorStyle::OpenHand })
                 .tooltip(tip("Drag to place the webcam anywhere"))
                 .on_mouse_down(
@@ -1354,9 +1497,9 @@ impl Clipper {
                     .items_center()
                     .justify_center()
                     .gap_2()
-                    .text_xs()
-                    .text_color(rgb(0xc7c7cc))
-                    .when(spin, |d| d.child(Spinner::new().color(c(0xc7c7cc))))
+                    .text_size(px(tk::T12))
+                    .text_color(rgb(tk::ON_VIDEO))
+                    .when(spin, |d| d.child(Spinner::new().color(c(tk::ON_VIDEO))))
                     // The mascot greets you before the first recording.
                     .when(idle_empty, |d| d.child(img(mascot::image(180)).h(px(84.)).w(px(84. * mascot::aspect())).mb_1()))
                     .child(text),
@@ -1370,95 +1513,67 @@ impl Clipper {
         // Images are ordered for the output's shape (portrait first for 9:16).
         let portrait = self.layout.ratio == layout::Ratio::Portrait;
         self.bg_picker.update(cx, |p, cx| p.set_portrait(portrait, cx));
-        // Tabs live in a vertical rail at the right edge.
-        let mut rail = div()
-            .w(px(RAIL_W))
-            .flex_none()
-            .h_full()
-            .flex()
-            .flex_col()
-            .items_center()
-            .gap(px(4.))
-            .py(px(10.))
-            .rounded(px(R_CARD))
-            .bg(rgb(tk::card()));
-        for p in Panel::ALL {
-            let on = p == self.panel;
-            rail = rail.child(
-                div()
-                    .id(("panel-tab", p as usize))
-                    .w(px(RAIL_W - 12.0))
-                    .py(px(8.))
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .gap(px(4.))
-                    .rounded(px(14.))
-                    .cursor_pointer()
-                    .when(on, |d| d.bg(ui::accent_tint()).text_color(rgb(tk::green_ink())))
-                    .when(!on, |d| d.text_color(rgb(tk::muted())).hover(|d| d.bg(rgb(tk::raised())).text_color(rgb(tk::text()))))
-                    .child(p.icon().size(px(20.)))
-                    .child(div().text_size(px(11.)).font_weight(FontWeight::MEDIUM).child(p.label()))
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+        let tabs = ui::pill_tabs_fill(
+            "panel-tabs",
+            Panel::ALL
+                .into_iter()
+                .map(|p| {
+                    let on: ui::OnClick = Box::new(cx.listener(move |this, _: &ClickEvent, _, cx| {
                         this.panel = p;
                         cx.notify();
-                    })),
-            );
-        }
+                    }));
+                    (gpui_kit::SharedString::from(p.label()), p == self.panel, on)
+                })
+                .collect(),
+        );
         let body = match self.panel {
             Panel::Layout => self.layout_panel(cx),
-            Panel::Scene => div()
-                .flex()
-                .flex_col()
-                .gap_5()
-                .child(section("Background", self.background_section(cx)))
-                .child(section("Frame", self.frame_section(cx))),
+            Panel::Scene => div().flex().flex_col().gap(px(tk::S4)).child(section("Background", self.background_section(cx))).child(section("Frame", self.frame_section(cx))),
             Panel::Zoom => div()
                 .flex()
                 .flex_col()
-                .gap_5()
+                .gap(px(tk::S4))
                 .child(self.zoom_panel(cx))
                 .child(section("Camera follow", self.camera_section(cx)))
                 .child(section("Cursor", self.cursor_section(cx))),
             Panel::Captions => self.captions_panel(cx),
-            Panel::Shots => self.screenshot_panel(cx),
             Panel::Output => div()
                 .flex()
                 .flex_col()
-                .gap_5()
+                .gap(px(tk::S4))
                 .child(section("Display", self.source_section(cx)))
                 .child(section("Appearance", self.appearance_picker(cx)))
                 .child(section("Audio", div().child(self.mic.clone())))
                 .child(section("Export", self.output_section(cx)))
+                .child(self.screenshot_panel(cx))
                 .child(section(
                     "Shortcuts while recording",
                     div()
                         .flex()
                         .flex_col()
                         .gap_2()
-                        .child(ui::shortcut("Pause / resume", self.hotkey_config.pause.label()))
+                        .child(ui::shortcut("Pause or resume", self.hotkey_config.pause.label()))
                         .child(ui::shortcut("Stop", self.hotkey_config.stop.label())),
                 )),
         };
-        let panel = div()
+        div()
             .w(px(PANEL_W))
             .flex_none()
             .h_full()
             .flex()
             .flex_col()
-            .rounded(px(R_CARD))
+            .rounded(px(tk::R_PANEL))
             .overflow_hidden()
-            .bg(rgb(tk::card()))
-            .child(div().px_4().pt_4().pb_1().text_base().font_weight(FontWeight::SEMIBOLD).child(self.panel.label()))
+            .bg(rgb(tk::mist()))
+            .child(div().flex_none().px(px(tk::S3)).pt(px(tk::S3)).pb(px(tk::S1)).child(tabs))
             .child(
                 div()
                     .id("settings-scroll")
                     .flex_1()
                     .min_h_0()
                     .overflow_y_scrollbar()
-                    .child(div().flex().flex_col().px_4().pt_3().pb_4().child(body)),
-            );
-        div().h_full().flex_none().flex().gap(px(GAP)).child(panel).child(rail)
+                    .child(div().flex().flex_col().px(px(tk::S4)).pt(px(tk::S2)).pb(px(tk::S6)).child(body)),
+            )
     }
 
     fn source_section(&self, cx: &mut Context<Self>) -> Div {
@@ -1479,9 +1594,9 @@ impl Clipper {
                         .w_full()
                         .flex()
                         .justify_between()
-                        .text_sm()
+                        .text_size(px(tk::T13))
                         .child(name.clone())
-                        .child(div().text_xs().text_color(rgb(tk::muted())).child(dims.clone())),
+                        .child(div().text_size(px(tk::T12)).text_color(rgb(tk::ink_soft())).child(dims.clone())),
                 )
         });
         div()
@@ -1538,7 +1653,7 @@ impl Clipper {
 
     /// Cursor size and the click highlight.
     fn cursor_section(&self, cx: &mut Context<Self>) -> Div {
-        const RIPPLE_COLORS: [u32; 5] = [0xa4f47c, 0xffffff, 0xfacc15, 0x22d3ee, 0xf472b6];
+        const RIPPLE_COLORS: [u32; 5] = tk::content::RIPPLE;
         let click = self.style.click;
         let toggle = gpui_kit::component::switch::Switch::new("click-highlight").cursor_pointer()
             .checked(click.enabled)
@@ -1556,9 +1671,9 @@ impl Clipper {
                 .p(px(2.))
                 .rounded(px(9.))
                 .border_2()
-                .border_color(rgb(if selected { tk::green_ink() } else { tk::card() }))
+                .border_color(rgb(if selected { tk::selected() } else { tk::mist() }))
                 .cursor_pointer()
-                .child(div().size_full().rounded_full().border_1().border_color(rgb(tk::line())).bg(rgb(v)))
+                .child(div().size_full().rounded_full().border_1().border_color(rgb(tk::stone())).bg(rgb(v)))
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                     this.style.click.color = hex_color(v);
                     cx.notify();
@@ -1571,7 +1686,7 @@ impl Clipper {
             .child(self.knob(Knob::Cursor, "Cursor size", cx))
             .child(toggle)
             .when(click.enabled, |d| {
-                d.child(div().flex().items_center().justify_between().child(div().text_sm().child("Ripple color")).child(colors))
+                d.child(div().flex().items_center().justify_between().child(div().text_size(px(tk::T13)).child("Ripple color")).child(colors))
                     .child(self.knob(Knob::ClickSize, "Ripple size", cx))
                     .child(self.knob(Knob::ClickDuration, "Ripple duration", cx))
                     .child(note("Drawn from the recorded clicks (left and right), in the preview and every export."))
@@ -1620,9 +1735,9 @@ impl Clipper {
                     .flex()
                     .justify_between()
                     .gap_2()
-                    .text_xs()
+                    .text_size(px(tk::T12))
                     .child(div().truncate().child(display_path(&self.out_dir)))
-                    .child(div().text_color(rgb(tk::muted())).child("Change")),
+                    .child(div().text_color(rgb(tk::ink_soft())).child("Change")),
             );
         div()
             .flex()
@@ -1634,49 +1749,173 @@ impl Clipper {
 
     // ---------- header ----------
 
+    /// The editor header, shared in structure with the image editor: back to the Library,
+    /// the project name and a sentence of metadata, undo and redo, then the actions with the
+    /// coral Record or Export last.
     fn header(&self, cx: &mut Context<Self>) -> Div {
-        let subtitle = match &self.stage {
-            Stage::Idle => "New recording".to_string(),
+        use editor::icons;
+        let reviewing = matches!(self.stage, Stage::Review) && self.recording.is_some();
+        let meta = match &self.stage {
+            Stage::Idle => "Pick a format, a background and a source, then record.".to_string(),
             Stage::Starting | Stage::Recording => "Recording".to_string(),
-            Stage::Processing => "Preparing…".to_string(),
+            Stage::Processing => "Preparing the preview...".to_string(),
+            Stage::Error(_) => "Couldn't finish".to_string(),
             _ if self.recording.is_some() => {
-                let d = self.out_duration();
+                let d = self.out_duration().round() as u64;
                 let n = self.zooms.len();
-                format!(
-                    "{}:{:02}  ·  {n} zoom{}",
-                    (d / 60.0) as u32,
-                    (d % 60.0) as u32,
-                    if n == 1 { "" } else { "s" }
-                )
+                let len = if d >= 60 { format!("{} min {} s", d / 60, d % 60) } else { format!("{d} s") };
+                format!("{len}, {n} zoom{}", if n == 1 { "" } else { "s" })
             }
             _ => String::new(),
+        };
+        let title: gpui_kit::AnyElement = if reviewing {
+            div()
+                .w(px(240.))
+                .child(gpui_kit::component::input::Input::new(&self.name_input).appearance(false).text_size(px(tk::T15)).font_weight(FontWeight::BOLD))
+                .into_any_element()
+        } else {
+            div()
+                .text_size(px(tk::T15))
+                .font_weight(FontWeight::BOLD)
+                .child(match self.stage {
+                    Stage::Idle => "New recording",
+                    Stage::Starting | Stage::Recording => "Recording",
+                    _ => "Recording",
+                })
+                .into_any_element()
+        };
+        let can_back = matches!(self.stage, Stage::Idle | Stage::Review | Stage::Error(_));
+        let left = div()
+            .flex()
+            .flex_1()
+            .min_w_0()
+            .items_center()
+            .gap(px(tk::S2))
+            .when(!matches!(self.stage, Stage::Starting | Stage::Recording), |d| {
+                d.child(ui::icon_button("back", icons::back_arrow(), "Back to the Library").disabled(!can_back).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.back_to_library(cx))))
+            })
+            .child(div().flex().flex_col().min_w_0().child(title).child(div().text_size(px(tk::T12)).text_color(rgb(tk::ink_soft())).truncate().child(meta)))
+            .when(reviewing, |d| {
+                d.child(ui::vdivider(20.).mx_1())
+                    .child(ui::icon_button("h-undo", icons::undo(), "Undo  ⌘Z").disabled(!self.edit_history.can_undo()).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.undo_edit();
+                        cx.notify();
+                    })))
+                    .child(ui::icon_button("h-redo", icons::redo(), "Redo  ⇧⌘Z").disabled(!self.edit_history.can_redo()).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.redo_edit();
+                        cx.notify();
+                    })))
+            });
+        let menu_btn = |id: &'static str, icon: gpui_kit::component::Icon, tip: &'static str, which: HeaderMenu, cx: &mut Context<Self>| {
+            ui::icon_button(id, icon, tip).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                this.header_menu = if this.header_menu == which { HeaderMenu::None } else { which };
+                cx.notify();
+            }))
         };
         div()
             .h(px(HEADER_H))
             .flex_none()
             .flex()
             .items_center()
-            .justify_between()
-            .pl(px(88.))
-            .pr(px(GAP + 2.0))
+            .gap(px(tk::S3))
+            .pl(px(tk::TRAFFIC_INSET))
+            .pr(px(tk::S4))
+            .child(left)
             .child(
                 div()
                     .flex()
+                    .flex_none()
                     .items_center()
-                    .gap_2()
-                    .child(img(mascot::image(56)).h(px(26.)).w(px(26. * mascot::aspect())))
-                    .child(div().text_base().font_weight(FontWeight::BOLD).child("Clipper"))
-                    .child(div().text_xs().text_color(rgb(tk::muted())).child(subtitle)),
+                    .gap(px(tk::S2))
+                    .child(menu_btn("shortcuts", icons::help(), "Keyboard shortcuts", HeaderMenu::Shortcuts, cx))
+                    .child(ui::icon_button("panel-toggle", icons::panel_right(), if self.panel_hidden { "Show the panel  ⌘." } else { "Hide the panel  ⌘." }).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.panel_hidden = !this.panel_hidden;
+                        cx.notify();
+                    })))
+                    .when(reviewing, |d| d.child(menu_btn("more", icons::more(), "More", HeaderMenu::More, cx)))
+                    .child(self.header_actions(cx)),
             )
-            .child(
-                div()
+    }
+
+    /// The header's popovers and the discard confirmation.
+    fn header_overlays(&self, cx: &mut Context<Self>) -> Option<Div> {
+        use editor::icons;
+        if self.confirm_discard {
+            return Some(ui::dialog(
+                "Discard changes?",
+                "Cuts and zooms go back to the original recording. The recording itself is kept.",
+                vec![
+                    ui::ghost_button("discard-no").label("Cancel").on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.confirm_discard = false;
+                        cx.notify();
+                    })),
+                    ui::primary_button("discard-yes").label("Discard changes").on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.confirm_discard = false;
+                        this.reset_edits();
+                        this.zooms.clear();
+                        this.selected = None;
+                        cx.notify();
+                    })),
+                ],
+                Box::new(cx.listener(|this, _: &ClickEvent, _, cx| {
+                    this.confirm_discard = false;
+                    cx.notify();
+                })),
+            ));
+        }
+        let pop = match self.header_menu {
+            HeaderMenu::None => return None,
+            HeaderMenu::More => {
+                let dir = self.recording.as_ref().map(|r| r.dir.clone());
+                ui::menu(220.)
+                    .child(ui::menu_item("m-discard", Some(icons::rotate_left()), "Discard changes").on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.header_menu = HeaderMenu::None;
+                        this.confirm_discard = true;
+                        cx.notify();
+                    })))
+                    .child(ui::menu_item("m-folder", Some(icons::folder()), "Show in folder").on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        this.header_menu = HeaderMenu::None;
+                        if let Some(d) = &dir {
+                            cx.reveal_path(&d.join("raw.mp4"));
+                        }
+                        cx.notify();
+                    })))
+            }
+            HeaderMenu::Shortcuts => {
+                let k = &self.hotkey_config;
+                ui::popover()
+                    .w(px(300.))
+                    .p(px(tk::S4))
                     .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(self.header_actions(cx))
-                    .child(div().w(px(1.)).h(px(20.)).mx_1().bg(ui::hairline_strong()))
-                    .child(self.theme_toggle(cx)),
-            )
+                    .flex_col()
+                    .gap(px(tk::S2))
+                    .child(ui::heading("Keyboard shortcuts"))
+                    .child(ui::shortcut("Play or pause", "Space"))
+                    .child(ui::shortcut("Split at the playhead", "S"))
+                    .child(ui::shortcut("Add a zoom", "Z"))
+                    .child(ui::shortcut("Delete segment or zoom", "⌫"))
+                    .child(ui::shortcut("Step a frame", "← →"))
+                    .child(ui::shortcut("Step a second", "⇧ ← →"))
+                    .child(ui::shortcut("Undo", "⌘Z"))
+                    .child(ui::shortcut("Redo", "⇧⌘Z"))
+                    .child(ui::shortcut("Zoom the timeline", "− +"))
+                    .child(ui::shortcut("Show or hide the timeline", "⌘J"))
+                    .child(ui::shortcut("Show or hide the panel", "⌘."))
+                    .child(ui::shortcut("Pause or resume recording", k.pause.label()))
+                    .child(ui::shortcut("Stop recording", k.stop.label()))
+                    .child(ui::shortcut("Screenshot", k.screenshot.label()))
+            }
+        };
+        Some(
+            div()
+                .absolute()
+                .inset_0()
+                .child(div().id("hm-dismiss").absolute().inset_0().on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                    this.header_menu = HeaderMenu::None;
+                    cx.notify();
+                })))
+                .child(div().absolute().top(px(HEADER_H - 4.0)).right(px(tk::S4)).occlude().child(pop.with_animation("hm-pop", ui::enter(), |el, t| el.opacity(t)))),
+        )
     }
 
     /// Auto / Light / Dark, in the Output tab.
@@ -1700,27 +1939,6 @@ impl Clipper {
             .child(note("Auto follows your Mac's light or dark setting."))
     }
 
-    /// Header shortcut: cycles Auto → Light → Dark; the icon shows the current choice.
-    fn theme_toggle(&self, cx: &mut Context<Self>) -> Button {
-        let now = theme::preference();
-        let (icon, next) = match now {
-            theme::Appearance::System => (editor::icons::sun_moon(), theme::Appearance::Light),
-            theme::Appearance::Light => (editor::icons::sun(), theme::Appearance::Dark),
-            theme::Appearance::Dark => (editor::icons::moon(), theme::Appearance::System),
-        };
-        Button::new("theme-toggle")
-            .cursor_pointer()
-            .ghost()
-            .rounded_full()
-            .size(px(34.))
-            .icon(icon)
-            .tooltip(format!("Appearance: {}. Click for {}", now.label(), next.label()))
-            .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
-                theme::set_preference(next, cx);
-                cx.notify();
-            }))
-    }
-
     /// What Record captures: the whole display or a region, right next to Record. In
     /// Region mode the region's size is shown; click it to pick a new one.
     fn source_picker(&self, cx: &mut Context<Self>) -> Div {
@@ -1734,10 +1952,10 @@ impl Clipper {
                 .gap_1p5()
                 .rounded_full()
                 .cursor_pointer()
-                .text_sm()
+                .text_size(px(tk::T13))
                 .font_weight(FontWeight::MEDIUM)
-                .when(on, |d| d.bg(rgb(tk::text())).text_color(rgb(tk::bg())))
-                .when(!on, |d| d.text_color(rgb(tk::muted())).hover(|d| d.bg(rgb(tk::hover())).text_color(rgb(tk::text()))))
+                .when(on, |d| d.bg(rgb(tk::text())).text_color(rgb(tk::paper())))
+                .when(!on, |d| d.text_color(rgb(tk::ink_soft())).hover(|d| d.bg(rgb(tk::hover())).text_color(rgb(tk::text()))))
                 .child(icon.size(px(15.)))
                 .child(label)
         };
@@ -1755,10 +1973,10 @@ impl Clipper {
                 .border_color(ui::hairline())
                 .cursor_pointer()
                 .hover(|d| d.bg(rgb(tk::hover())))
-                .text_xs()
+                .text_size(px(tk::T12))
                 .text_color(rgb(tk::text()))
                 .child(format!("{} × {}", r.w, r.h))
-                .child(editor::icons::edit().size(px(13.)).text_color(rgb(tk::muted())))
+                .child(editor::icons::edit().size(px(13.)).text_color(rgb(tk::ink_soft())))
                 .tooltip(tip("Select a new region"))
                 .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.open_selector(cx)))
         });
@@ -1794,139 +2012,103 @@ impl Clipper {
     }
 
     fn header_actions(&self, cx: &mut Context<Self>) -> Div {
-        let row = div().flex().items_center().gap_2();
+        use editor::icons;
+        let row = div().flex().items_center().gap(px(tk::S2));
         match &self.stage {
-            Stage::Idle => row.child(self.source_picker(cx)).child(div().w(px(1.)).h(px(20.)).mx_1().bg(ui::hairline_strong())).child(
-                header_button("screenshot", cx)
-                    .icon(editor::icons::camera())
-                    .child("Screenshot")
-                    .tooltip(format!("Screenshot  {}", self.hotkey_config.screenshot.label()))
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.take_screenshot(true, cx))),
-            ).child(
-                accent_button("record", cx)
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.start_recording(cx)))
-                    .child(div().size(px(10.)).rounded_full().bg(rgb(tk::red())).border_2().border_color(rgb(tk::on_green())))
-                    .child("Record"),
+            Stage::Idle => row.child(self.source_picker(cx)).child(
+                ui::coral_button("record")
+                    .icon(icons::record())
+                    .label("Record")
+                    .tooltip("Record the screen")
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.start_recording(cx))),
             ),
             Stage::Starting | Stage::Recording => {
                 let elapsed = self.recorder.as_ref().map(|r| r.elapsed()).unwrap_or_default();
                 let paused = self.recorder.as_ref().is_some_and(|r| r.is_paused());
                 let secs = elapsed.as_secs();
                 let starting = matches!(self.stage, Stage::Starting);
-                let blink = !paused && elapsed.as_millis() / 600 % 2 == 0;
                 row.child(
                     div()
                         .flex()
                         .items_center()
-                        .gap_2()
-                        .text_sm()
-                        .when(starting, |d| d.child(Spinner::new().color(c(tk::muted()))))
-                        .when(!starting, |d| d.child(dot(if blink { tk::red() } else { tk::bg() }, 8.)))
-                        .child(if starting {
-                            "Starting…"
-                        } else if paused {
-                            "Paused"
-                        } else {
-                            "Recording"
-                        })
-                        .child(
-                            div()
-                                .font_weight(FontWeight::MEDIUM)
-                                .child(format!("{:02}:{:02}", secs / 60, secs % 60)),
-                        ),
+                        .gap(px(tk::S2))
+                        .h(px(36.))
+                        .px(px(tk::S3))
+                        .rounded_full()
+                        .bg(rgb(tk::mist()))
+                        .text_size(px(tk::T13))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .when(starting, |d| d.child(Spinner::new().color(c(tk::ink_soft()))))
+                        .when(!starting, |d| d.child(dot(if paused { tk::ink_soft() } else { tk::coral() }, 10.)))
+                        .child(if starting { "Starting..." } else if paused { "Paused" } else { "Recording" })
+                        .child(ui::timecode(format!("{}:{:02}", secs / 60, secs % 60))),
                 )
-                .child(
-                    header_button("stop", cx)
-                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.stop_recording(cx)))
-                        .child(div().size(px(10.)).rounded(px(3.)).bg(rgb(tk::red())))
-                        .child("Stop"),
-                )
+                .child(ui::secondary_button("stop").icon(icons::stop()).label("Stop").tooltip(format!("Stop  {}", self.hotkey_config.stop.label())).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.stop_recording(cx))))
             }
             Stage::Processing => row
-                .text_sm()
-                .text_color(rgb(tk::muted()))
-                .child(Spinner::new().color(c(tk::muted())))
-                .child("Preparing preview…"),
+                .text_size(px(tk::T13))
+                .text_color(rgb(tk::ink_soft()))
+                .child(Spinner::new().color(c(tk::ink_soft())))
+                .child("Preparing the preview..."),
             Stage::Review => {
-                // After an export: where it went, and the editor stays open for changes and
-                // re-exports.
+                // After an export: where it went. The editor stays open for changes.
                 let saved = self.saved.clone().map(|out| {
                     let name = out.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
                     div()
+                        .id("saved-note")
                         .flex()
                         .items_center()
-                        .gap_2()
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap_1p5()
-                                .max_w(px(260.))
-                                .text_xs()
-                                .text_color(rgb(tk::muted()))
-                                .child(gpui_kit::component::Icon::new(gpui_kit::assets::IconName::CircleCheck).size_3p5().text_color(rgb(tk::green_ink())))
-                                .child(div().truncate().child(format!("Saved {name}"))),
-                        )
-                        .child(header_button("reveal", cx).child("Show in Finder").on_click(move |_, _, _| {
-                            let _ = std::process::Command::new("open").arg("-R").arg(&out).spawn();
-                        }))
+                        .gap(px(tk::S1 + 2.0))
+                        .max_w(px(240.))
+                        .text_size(px(tk::T12))
+                        .text_color(rgb(tk::ink_soft()))
+                        .cursor_pointer()
+                        .child(gpui_kit::component::Icon::new(gpui_kit::assets::IconName::CircleCheck).size_3p5().text_color(rgb(tk::success())))
+                        .child(div().truncate().child(format!("Exported {name}")))
+                        .tooltip(tip("Show in folder"))
+                        .on_click(move |_, _, cx| cx.reveal_path(&out))
                 });
-                row.children(saved)
-                    .child(
-                        header_button("discard", cx)
-                            .text_color(rgb(tk::muted()))
-                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                // Keep the recording files once something was exported from it.
-                                let discard = this.saved.is_none();
-                                this.reset(discard, cx)
-                            }))
-                            .child(if self.saved.is_some() { "New recording" } else { "Discard" }),
-                    )
-                    .child(
-                        accent_button("export", cx)
-                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.open_export(cx)))
-                            .child(if self.saved.is_some() { "Export again" } else { "Export" }),
-                    )
+                row.children(saved).child(ui::coral_button("export").icon(icons::export()).label("Export").tooltip("Export  ⌘E").on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.open_export(cx))))
             }
             Stage::Exporting => {
                 let p = self.export.run.as_ref().map_or(0.0, |r| r.job.progress.render.load(Ordering::Relaxed) as f32 / 10.0);
-                row.child(div().text_sm().child("Exporting…"))
-                    .child(div().w(px(140.)).child(Progress::new("export-progress").value(p).color(c(tk::green()))))
-                    .child(
-                        header_button("export-open", cx)
-                            .child("Details")
-                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                this.export.open = true;
-                                cx.notify();
-                            })),
-                    )
+                row.child(div().text_size(px(tk::T13)).child("Exporting..."))
+                    .child(div().w(px(120.)).child(Progress::new("export-progress").value(p).color(c(tk::text()))))
+                    .child(ui::secondary_button("export-open").label("Details").on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.export.open = true;
+                        cx.notify();
+                    })))
             }
-            Stage::Error(_) => row.child(
-                header_button("back", cx)
-                    .child("Back")
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.reset(false, cx))),
-            ),
+            Stage::Error(_) => row,
         }
     }
 }
 
 impl Render for Clipper {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let library = matches!(self.stage, Stage::Idle) && self.screen == Screen::Library;
+        if let Some(n) = self.name_sync.take() {
+            self.name_input.update(cx, |s, cx| s.set_value(n, window, cx));
+        }
         // Keep keyboard shortcuts working when nothing else has focus.
         if window.focused(cx).is_none() {
-            self.focus.focus(window, cx);
+            if library {
+                let fh = self.library.read(cx).focus_handle().clone();
+                fh.focus(window, cx);
+            } else {
+                self.focus.focus(window, cx);
+            }
+        }
+        let root = div().size_full().relative().flex().flex_col().bg(rgb(tk::paper())).text_color(rgb(tk::text())).font_family(theme::font());
+        if library {
+            return root.child(self.library.clone());
         }
         let error = match &self.stage {
             Stage::Error(msg) => Some(msg.clone()),
             _ => None,
         };
-        div()
-            .size_full()
-            .flex()
-            .flex_col()
-            .bg(cx.theme().background)
-            .text_color(cx.theme().foreground)
-            .track_focus(&self.focus)
+        let _ = cx.theme();
+        root.track_focus(&self.focus)
             .on_key_down(cx.listener(Self::on_key))
             .on_mouse_move(cx.listener(Self::on_drag_move))
             .on_mouse_up(MouseButton::Left, cx.listener(Self::on_drag_end))
@@ -1941,43 +2123,41 @@ impl Render for Clipper {
                     .gap(px(GAP))
                     .px(px(GAP))
                     .child(self.preview_pane(window, cx))
-                    .child(self.settings_pane(cx))
+                    .when(!self.panel_hidden, |d| d.child(self.settings_pane(cx)))
                     .when_some(error, |d, msg| {
                         d.child(
                             div()
                                 .absolute()
-                                .left_6()
-                                .bottom_6()
+                                .left(px(tk::S6 + GAP))
+                                .bottom(px(tk::S6))
                                 .max_w(px(420.))
-                                .p_4()
-                                .rounded(px(R_MID))
-                                .bg(rgb(tk::raised()))
-                                .flex()
-                                .flex_col()
-                                .gap_1()
-                                .child(div().text_sm().font_weight(FontWeight::MEDIUM).child("Something went wrong"))
-                                .child(note(&msg)),
+                                .child(
+                                    ui::popover()
+                                        .p(px(tk::S4))
+                                        .flex()
+                                        .flex_col()
+                                        .gap(px(tk::S1))
+                                        .child(div().text_size(px(tk::T13)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(tk::error_text())).child("The recording couldn't finish"))
+                                        .child(note(&msg)),
+                                ),
                         )
                     }),
             )
             .child(div().p(px(GAP)).child(self.timeline_pane(window, cx)))
             .children(self.export_dialog(cx))
+            .children(self.header_overlays(cx))
     }
 }
 
-/// Section header + body.
+/// A panel section: a plain heading over its body, set off by a stone divider and space
+/// (no boxes inside boxes).
 fn section(title: &'static str, body: impl IntoElement) -> Div {
-    div()
-        .flex()
-        .flex_col()
-        .gap_2()
-        .child(div().text_xs().font_weight(FontWeight::SEMIBOLD).text_color(rgb(tk::muted())).child(title))
-        .child(body)
+    ui::section(title, false, body)
 }
 
 /// Small label above a control.
 fn field(label: &'static str, control: impl IntoElement) -> Div {
-    div().flex().flex_col().gap_1().child(div().text_xs().child(label)).child(control)
+    div().flex().flex_col().gap(px(tk::S1 + 2.0)).child(ui::eyebrow(label)).child(control)
 }
 
 /// Hover label from an owned string.
@@ -1996,7 +2176,7 @@ fn grid(cols: u16) -> Div {
 }
 
 fn note(text: &str) -> Div {
-    div().text_xs().text_color(rgb(tk::muted())).child(text.to_string())
+    ui::hint(text.to_string())
 }
 
 fn dot(color: u32, d: f32) -> Div {
@@ -2013,23 +2193,6 @@ fn display_path(p: &Path) -> String {
 }
 
 // ---------- GPUI Kit components, styled for Clipper ----------
-
-/// Secondary header action: a dark pill.
-fn header_button(id: &'static str, _: &App) -> Button {
-    Button::new(id).cursor_pointer().secondary().rounded_full().h(px(34.)).px_4().gap_2().text_sm()
-}
-
-/// The one green call to action in the header (Record, Export).
-fn accent_button(id: &'static str, _: &App) -> Button {
-    Button::new(id).cursor_pointer()
-        .primary()
-        .rounded_full()
-        .h(px(34.))
-        .px_5()
-        .gap_2()
-        .text_sm()
-        .font_weight(FontWeight::SEMIBOLD)
-}
 
 fn button(id: &'static str, label: &'static str, _: &App) -> Button {
     Button::new(id).cursor_pointer().secondary().rounded(px(R_MID)).label(label)
@@ -2109,7 +2272,7 @@ fn main() {
         gpui_kit::init(cx);
         theme::init(cx);
 
-        let bounds = Bounds::centered(None, size(px(1360.), px(860.)), cx);
+        let bounds = Bounds::centered(None, crate::theme::initial_size(), cx);
         let main = gpui_kit::open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -2120,7 +2283,7 @@ fn main() {
                 }),
                 is_resizable: true,
                 // Room for the panel, a usable preview and the timeline.
-                window_min_size: Some(size(px(1040.), px(640.))),
+                window_min_size: Some(size(px(tk::MIN_W), px(tk::MIN_H))),
                 ..Default::default()
             },
             cx,
@@ -2179,47 +2342,31 @@ fn main() {
                 // CLIPPER_OPEN=<session dir>: opens a saved recording in the editor (its raw,
                 // cursor track, webcam and captions).
                 if let Some(dir) = std::env::var_os("CLIPPER_OPEN").map(PathBuf::from) {
-                    let job = cx.background_executor().spawn(async move {
-                        let raw = dir.join("raw.mp4");
-                        let (width, height, duration) = recorder::probe(&raw)?;
-                        let samples = std::fs::read_to_string(dir.join("cursor.csv"))
-                            .unwrap_or_default()
-                            .lines()
-                            .skip(1)
-                            .filter_map(|l| {
-                                let v: Vec<&str> = l.split(',').collect();
-                                Some(cursor::Sample { t: v.first()?.parse().ok()?, x: v.get(1)?.parse().ok()?, y: v.get(2)?.parse().ok()?, down: *v.get(3)? == "1" })
-                            })
-                            .collect();
-                        let cam = dir.join("webcam.mp4");
-                        let webcam = recorder::probe(&cam).ok().map(|(w, h, _)| webcam::Track { path: cam, width: w, height: h, spans: vec![(0.0, duration)] });
-                        let rec = Recording { dir: dir.clone(), raw, width, height, duration, samples, webcam, px_per_pt: 2.0 };
-                        let preview = export::build_preview(&rec)?;
-                        let track = audio::decode(&rec).ok().flatten();
-                        let caps = captions::Captions::load(&dir);
-                        anyhow::Ok((rec, preview, track, caps))
-                    });
-                    cx.spawn(async move |this, cx| {
-                        if let Ok((rec, preview, track, caps)) = job.await {
+                    c.open_session(dir, false, cx);
+                    // CLIPPER_EDIT_DEMO: a few cuts once it's open, to look at the timeline.
+                    if std::env::var_os("CLIPPER_EDIT_DEMO").is_some() {
+                        cx.spawn(async move |this, cx| {
+                            while this.update(cx, |c, _| !matches!(c.stage, Stage::Review)).unwrap_or(false) {
+                                cx.background_executor().timer(Duration::from_millis(100)).await;
+                            }
                             let _ = this.update(cx, |c, cx| {
-                                c.show_recording(rec, preview, track, caps, cx);
-                                c.playing = false;
-                                // CLIPPER_EDIT_DEMO: a few cuts, to look at the timeline.
-                                if std::env::var_os("CLIPPER_EDIT_DEMO").is_some() {
-                                    for t in [2.0, 4.0, 7.0] {
-                                        c.playhead = t;
-                                        c.split_at_playhead();
-                                    }
-                                    c.edit_sel = Some(1);
-                                    c.delete_segment();
-                                    c.edit_sel = Some(2);
-                                    c.seek_output(1.0);
+                                for t in [2.0, 4.0, 7.0] {
+                                    c.playhead = t;
+                                    c.split_at_playhead();
                                 }
+                                c.edit_sel = Some(1);
+                                c.delete_segment();
+                                c.edit_sel = Some(2);
+                                c.seek_output(1.0);
                                 cx.notify();
                             });
-                        }
-                    })
-                    .detach();
+                        })
+                        .detach();
+                    }
+                }
+                // Dev: open on the recording setup (CLIPPER_STUDIO=1), as before the Library.
+                if std::env::var_os("CLIPPER_STUDIO").is_some() || std::env::var_os("CLIPPER_PANEL").is_some() || std::env::var_os("CLIPPER_SELECT").is_some() {
+                    c.screen = Screen::Studio;
                 }
                 // CLIPPER_FAKE_CAPTIONS=<session dir>: that session's captions, repeated into a
                 // long list (nothing is saved: there's no recording).

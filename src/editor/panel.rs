@@ -5,7 +5,7 @@ use crate::theme as tk;
 use super::doc::*;
 use super::stickers;
 use super::view::{EditorView, Prop, RedactMode, RedactShape, Slot, Tool};
-use crate::ui::{self, S2, S4, S6, hairline};
+use crate::ui::{self, S2, S4, hairline};
 
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::color_picker::ColorPicker;
@@ -27,7 +27,7 @@ fn section(title: &str) -> Div {
         .pt(px(S4))
         .border_t_1()
         .border_color(hairline())
-        .text_sm()
+        .text_size(px(tk::T13))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(rgb(tk::text()))
         .child(title.to_string())
@@ -56,6 +56,7 @@ fn context(v: &EditorView) -> Tool {
         Some(Kind::Emoji(_)) => Tool::Emoji,
         Some(Kind::Sticker(_)) => Tool::Sticker,
         Some(Kind::Redact(_)) => Tool::Redact,
+        None if v.tool == Tool::Select => Tool::Background,
         None => v.tool,
     }
 }
@@ -79,13 +80,13 @@ impl EditorView {
                     .rounded(px(7.))
                     .border_2()
                     .border_color(if on { gpui_kit::Hsla::from(rgb(tk::text())) } else { ui::hairline_strong() })
-                    .bg(rgb(tk::card()))
+                    .bg(rgb(tk::mist()))
                     .tooltip(|w, cx| gpui_kit::component::tooltip::Tooltip::new("None").build(w, cx))
                     .flex()
                     .items_center()
                     .justify_center()
-                    .text_xs()
-                    .text_color(rgb(tk::muted()))
+                    .text_size(px(tk::T12))
+                    .text_color(rgb(tk::ink_soft()))
                     .cursor_pointer()
                     .child("∅")
                     .on_click(cx.listener(move |v, _: &ClickEvent, _, cx| v.set_color(slot, None, cx))),
@@ -139,7 +140,7 @@ impl EditorView {
 
     fn switch(&self, id: &'static str, label: &'static str, on: bool, cx: &mut Context<Self>, f: fn(&mut EditorView, bool, &mut Context<EditorView>)) -> Div {
         let this = cx.entity().downgrade();
-        div().flex().items_center().justify_between().child(div().text_sm().child(label)).child(
+        div().flex().items_center().justify_between().child(div().text_size(px(tk::T13)).child(label)).child(
             Switch::new(id).cursor_pointer().checked(on).on_click(move |checked: &bool, _, cx| {
                 let checked = *checked;
                 let _ = this.update(cx, |v, cx| f(v, checked, cx));
@@ -153,42 +154,40 @@ impl EditorView {
 
     pub(super) fn panel(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let ctx = context(self);
-        let mut col = div().flex().flex_col().gap(px(S6)).px(px(S4 + 4.0)).py(px(S4 + 2.0));
+        let mut col = div().flex().flex_col().gap(px(S4 + 4.0)).px(px(S4 + 4.0)).py(px(S4 + 2.0));
         let locked = self.selected().is_some_and(|o| o.locked);
-        let kind = if self.selected().is_some() { "Selected" } else { "Tool" };
+        let title = match (self.selected().is_some(), ctx) {
+            (_, Tool::Background) => "Background".to_string(),
+            (true, t) if locked => format!("{}, locked", t.label()),
+            (_, t) => t.label().to_string(),
+        };
         col = col.child(
             div()
                 .flex()
-                .items_center()
-                .justify_between()
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(2.))
-                        .child(div().text_xs().text_color(rgb(tk::muted())).child(if locked { "Selected · locked" } else { kind }))
-                        .child(div().text_base().font_weight(FontWeight::SEMIBOLD).child(ctx.label())),
-                )
-                .child(ui::kbd(ctx.key().to_uppercase())),
+                .flex_col()
+                .gap(px(2.))
+                .child(div().text_size(px(tk::T18)).font_weight(FontWeight::BOLD).child(title))
+                .when(ctx != Tool::Background, |d| {
+                    d.child(
+                        div()
+                            .id("back-to-bg")
+                            .text_size(px(tk::T13))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(rgb(tk::ink_soft()))
+                            .cursor_pointer()
+                            .hover(|d| d.text_color(rgb(tk::text())))
+                            .tab_index(0)
+                            .focus_visible(|s| s.shadow(ui::focus_ring()))
+                            .child("Back to background")
+                            .on_click(cx.listener(|v, _: &ClickEvent, w, cx| {
+                                v.select(None, w, cx);
+                                v.set_tool(Tool::Select, w, cx);
+                            })),
+                    )
+                }),
         );
         let body: Vec<AnyElement> = match ctx {
-            Tool::Select => vec![
-                Self::hint("Click an object to edit it. Drag the handles to resize or rotate.").into_any_element(),
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(S2 + 2.0))
-                    .child(ui::shortcut("Keep proportions", "⇧ drag"))
-                    .child(ui::shortcut("Nudge", "← → ↑ ↓"))
-                    .child(ui::shortcut("Resize by keyboard", "⌥ ← → ↑ ↓"))
-                    .child(ui::shortcut("Duplicate", "⌘D"))
-                    .child(ui::shortcut("Bring forward / back", "⌘] ⌘["))
-                    .child(ui::shortcut("Lock", "⌘L"))
-                    .child(ui::shortcut("Pan", "Space drag"))
-                    .child(ui::shortcut("Zoom", "Scroll · Pinch"))
-                    .child(ui::shortcut("Fit / 100%", "⌘0 ⌘1"))
-                    .into_any_element(),
-            ],
+            Tool::Select => vec![Self::hint("Click an object to edit it. Drag the handles to resize or rotate.").into_any_element()],
             Tool::Arrow => self.arrow_panel(cx),
             Tool::Callout => self.callout_panel(cx),
             Tool::Merge => self.merge_panel(window, cx),
@@ -227,7 +226,7 @@ impl EditorView {
                         self.swatches(
                             Slot::Highlight,
                             false,
-                            &[[0xff, 0xe6, 0x00, 255], [0x7c, 0xf4, 0x7c, 255], [0xff, 0x8a, 0xd8, 255], [0x7c, 0xd4, 0xff, 255], [0xff, 0xb3, 0x47, 255]],
+                            &tk::content::HIGHLIGHT,
                             cx,
                         ),
                     )
@@ -261,11 +260,6 @@ impl EditorView {
                     div()
                         .flex()
                         .gap(px(2.))
-                        .p(px(3.))
-                        .rounded(px(12.))
-                        .bg(rgb(tk::raised()))
-                        .border_1()
-                        .border_color(hairline())
                         .child(act("dup", super::icons::duplicate(), "Duplicate  ⌘D").on_click(cx.listener(|v, _: &ClickEvent, w, cx| v.object_action("duplicate", w, cx))))
                         .child(act("front", super::icons::front(), "Bring to front  ⇧⌘]").on_click(cx.listener(|v, _: &ClickEvent, w, cx| v.object_action("front", w, cx))))
                         .child(act("fwd", super::icons::forward(), "Bring forward  ⌘]").on_click(cx.listener(|v, _: &ClickEvent, w, cx| v.object_action("forward", w, cx))))
@@ -280,24 +274,23 @@ impl EditorView {
             // Destructive, so apart from the rest and in the danger color.
             if !locked {
                 col = col.child(
-                    Button::new("del").cursor_pointer()
-                        .danger()
-                        .small()
+                    ui::secondary_button("del")
                         .w_full()
+                        .text_color(rgb(tk::error_text()))
                         .icon(super::icons::trash())
-                        .label("Delete  ⌫")
+                        .label("Delete")
+                        .tooltip("Delete  ⌫")
                         .on_click(cx.listener(|v, _: &ClickEvent, w, cx| v.object_action("delete", w, cx))),
                 );
             }
         }
         div()
             .id("panel")
-            .w(px(300.))
+            .w(px(tk::PANEL_W))
             .flex_none()
             .h_full()
-            .border_l_1()
-            .border_color(hairline())
-            .bg(rgb(tk::card()))
+            .rounded(px(tk::R_PANEL))
+            .bg(rgb(tk::mist()))
             .overflow_y_scrollbar()
             .child(col)
     }
@@ -536,7 +529,7 @@ impl EditorView {
             .small()
             .w_full()
             .icon(super::icons::add_image())
-            .label("Add image…")
+            .label("Add image")
             .on_click(cx.listener(|v, _: &ClickEvent, _, cx| v.choose_images(cx)));
         let presets = div()
             .flex()
@@ -554,7 +547,7 @@ impl EditorView {
         };
         use super::merge::{BoardAlign, BoardLayout, Match};
         let n = self.doc.images().len();
-        v.push(section(&format!("Layout · {n} image{}", if n == 1 { "" } else { "s" })).into_any_element());
+        v.push(section(&format!("Layout, {n} image{}", if n == 1 { "" } else { "s" })).into_any_element());
         v.push(
             self.seg("b-layout", &[(BoardLayout::Vertical, "Vertical"), (BoardLayout::Horizontal, "Side by side"), (BoardLayout::Free, "Free")], board.layout, cx, |v, l, _, cx| {
                 v.doc_action(
@@ -682,7 +675,7 @@ impl EditorView {
                 .small()
                 .w_full()
                 .icon(super::icons::background())
-                .label("Background…")
+                .label("Background image")
                 .on_click(cx.listener(|v, _: &ClickEvent, w, cx| v.set_tool(Tool::Background, w, cx)))
                 .into_any_element(),
         );
@@ -694,9 +687,9 @@ impl EditorView {
                         .px_2()
                         .py_1()
                         .rounded(px(8.))
-                        .bg(rgb(tk::warn_bg()))
-                        .text_xs()
-                        .text_color(rgb(tk::warn()))
+                        .bg(rgb(tk::warning_bg()))
+                        .text_size(px(tk::T12))
+                        .text_color(rgb(tk::warning_text()))
                         .child(format!("Low resolution: shown at {:.1}× its pixels", img.scale()))
                         .into_any_element(),
                 );
@@ -817,7 +810,7 @@ impl EditorView {
                     .items_center()
                     .justify_center()
                     .rounded(px(8.))
-                    .text_xl()
+                    .text_size(px(tk::T24))
                     .cursor_pointer()
                     .when(on, |d| d.bg(rgb(tk::raised())))
                     .hover(|d| d.bg(rgb(tk::raised())))
@@ -880,7 +873,7 @@ impl EditorView {
             let cat = category(&src);
             if cat != last_cat && stickers::CATEGORIES.contains(&cat) {
                 last_cat = cat;
-                grid = grid.child(div().w_full().pt_1().text_xs().text_color(rgb(tk::muted())).child(cat));
+                grid = grid.child(div().w_full().pt_1().text_size(px(tk::T12)).text_color(rgb(tk::ink_soft())).child(cat));
             }
             let on = src == current;
             let thumb = self.thumbs.get(&src).cloned();
@@ -925,7 +918,7 @@ impl EditorView {
                     .secondary()
                     .small()
                     .icon(super::icons::folder())
-                    .label("Import sticker…")
+                    .label("Import sticker")
                     .on_click(cx.listener(|_, _: &ClickEvent, _, cx| {
                         let rx = cx.prompt_for_paths(PathPromptOptions { files: true, directories: false, multiple: true, prompt: Some("Import".into()) });
                         cx.spawn(async move |this, cx| {
@@ -1055,7 +1048,7 @@ impl EditorView {
                     .child(ib("flip-v", super::icons::flip_v(), "Flip vertically").on_click(cx.listener(|v, _: &ClickEvent, _, cx| v.doc_action(|d| d.flip(false), cx)))),
             )
             .into_any_element(),
-            div().text_sm().child(format!("{} × {} px", c.w.round(), c.h.round())).into_any_element(),
+            div().text_size(px(tk::T13)).child(format!("{} × {} px", c.w.round(), c.h.round())).into_any_element(),
             div()
                 .flex()
                 .gap_2()
@@ -1080,7 +1073,7 @@ impl EditorView {
             ];
         }
         let mut v = vec![self
-            .switch("bg-on", "Background", f.enabled, cx, |v, on, cx| v.doc_action(|d| d.frame.enabled = on, cx))
+            .switch("bg-on", "Show a background and frame", f.enabled, cx, |v, on, cx| v.doc_action(|d| d.frame.enabled = on, cx))
             .into_any_element()];
         if !f.enabled {
             v.push(Self::hint("Turn on to add padding, a background, rounded corners, a shadow or a window frame.").into_any_element());
@@ -1147,7 +1140,7 @@ impl EditorView {
             v.push(Self::hint("The screenshot is centered and fitted inside. Press Enter to apply.").into_any_element());
         }
         let (w, h) = self.doc.layout().canvas;
-        v.push(div().text_xs().text_color(rgb(tk::muted())).child(format!("Output {w} × {h} px")).into_any_element());
+        v.push(div().text_size(px(tk::T12)).font_features(ui::tnum()).text_color(rgb(tk::ink_soft())).child(format!("Output {w} × {h} px")).into_any_element());
         v
     }
 }

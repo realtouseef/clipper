@@ -10,10 +10,18 @@ other are one enum (`Stage`, `timeline::Gesture`, `webcam::LivePreview`, `cam_bu
 `editor::view::RenderState`, …), never a set of booleans. Debug builds print
 `state invariant broken: …` on stderr when `Stage` and its data disagree.
 
-- `src/theme.rs`: light and dark palettes and the Auto/Light/Dark choice. Views take every
-  color from a semantic token (`tk::text()`, `tk::card()`, `tk::ink(alpha)` for overlays,
-  `tk::green_ink()` for green as text/outline); never a raw hex. Surfaces that always sit on
-  dark pixels (region selector, screen picker, video overlays) use `tk::DARK` directly.
+- `src/theme.rs`: every design token. Light and dark palettes (paper, mist, ink, ink-soft,
+  stone, coral, success/warning/error) and the System/Light/Dark choice; type sizes
+  (`T12`..`T32`, Figtree bundled), radii (`R_STAGE` 24, `R_PANEL` 16, `R_CONTROL` 8, pills are
+  `rounded_full`), spacing (`S1`..`S6`), the one floating shadow, motion durations, and the
+  content swatches (`tk::content`). Views never hold a hex value or a raw size. Selected =
+  ink fill (`tk::selected()`) with paper text; coral only for Record, Export and the recording
+  indicator. Surfaces on the user's pixels (region selector, screen picker, video overlays)
+  use `tk::DARK` or `tk::scrim`.
+- `src/ui.rs`: the shared components (buttons incl. `coral_button`, `pill_tabs`, `segmented`,
+  `chip`, `swatch`, `popover`/`menu`, `toast_pill`, `dialog`, `focusable` with the focus ring).
+- `src/home.rs`: the Library (start screen): scans recordings, exports and screenshots,
+  background thumbnails cached in `~/Library/Caches/Clipper/thumbs`, virtualized masonry.
 - `src/editing/`: trim/split/cut logic (pure, unit tested); everything downstream reads
   raw time through `EditList::source_to_output` / `output_to_source`.
 - `src/cutting.rs`: the edit list wired into the app (undo, derived preview data).
@@ -31,7 +39,9 @@ focus (a covered window doesn't redraw, so screenshot it while visible).
 |---|---|
 | `CLIPPER_OPEN=<session dir>` | Open a saved recording (raw.mp4, cursor.csv, webcam.mp4, captions.json) in the editor. |
 | `CLIPPER_EDIT_DEMO=1` | With `CLIPPER_OPEN`: apply a few splits and a cut. |
-| `CLIPPER_PANEL=<layout\|scene\|zoom\|captions\|output\|shots>` | Open on a settings tab. |
+| `CLIPPER_PANEL=<scene\|layout\|zoom\|captions\|output>` | Open the recording setup on a settings tab. |
+| `CLIPPER_STUDIO=1` | Open the recording setup instead of the Library. |
+| `CLIPPER_SIZE=WxH` | Initial window size (clamped to the 1100x680 minimum). |
 | `CLIPPER_BG=<gradient\|animated\|image\|color>` | Pick a background type. |
 | `CLIPPER_RATIO=16:9`, `CLIPPER_PLACEMENT=<circle\|square\|split>`, `CLIPPER_SPLIT=<0..1>`, `CLIPPER_FAKE_CAM=1` | Layout and a test-card webcam without a camera. |
 | `CLIPPER_CAPTIONS=1`, `CLIPPER_CAP_MODEL=<id>`, `CLIPPER_FAKE_CAPTIONS=<session dir>` | Captions on, model, a long sample transcript (not saved). |

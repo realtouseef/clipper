@@ -13,8 +13,7 @@ use crate::{Clipper};
 use gpui_kit::prelude::*;
 use gpui_kit::{
     AnyWindowHandle, App, Bounds, DisplayId, Entity, FocusHandle, FontWeight, KeyDownEvent, MouseButton, MouseDownEvent,
-    MouseMoveEvent, Pixels, Point, Window, WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions, div,
-    hsla, point, px, rgb, size,
+    MouseMoveEvent, Pixels, Point, Window, WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions, div, point, px, rgb, size,
 };
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use std::ffi::{c_char, c_void};
@@ -224,7 +223,7 @@ impl Selector {
 impl Render for Selector {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let vh = f32::from(window.viewport_size().height);
-        let dim = hsla(0., 0., 0., 0.5);
+        let dim = tk::scrim(0.5);
         let shade = || div().absolute().bg(dim);
         let root = div()
             .size_full()
@@ -242,10 +241,11 @@ impl Render for Selector {
                         .px_4()
                         .py_2()
                         .rounded_full()
-                        .bg(hsla(0., 0., 0., 0.75))
-                        .text_sm()
-                        .text_color(rgb(tk::DARK.text))
-                        .child("Drag to select the area to record  ·  Esc to cancel"),
+                        .bg(tk::alpha(tk::DARK.paper, 0.92))
+                        .text_size(px(tk::T13))
+                        .font_family(tk::font())
+                        .text_color(rgb(tk::DARK.ink))
+                        .child("Drag to select the area to record. Press Esc to cancel."),
                 ),
             );
         };
@@ -260,9 +260,9 @@ impl Render for Selector {
                 .top(px(hy - HANDLE / 2.0))
                 .size(px(HANDLE))
                 .rounded(px(3.))
-                .bg(rgb(0xffffff))
+                .bg(rgb(tk::WHITE))
                 .border_1()
-                .border_color(rgb(tk::DARK.green))
+                .border_color(rgb(tk::DARK.paper))
         });
         // Readout and buttons sit below the selection, or above it near the bottom edge.
         let below = y + h + 56.0 < vh;
@@ -281,10 +281,10 @@ impl Render for Selector {
                     .px_3()
                     .py_1p5()
                     .rounded_full()
-                    .bg(hsla(0., 0., 0., 0.8))
-                    .text_xs()
+                    .bg(tk::alpha(tk::DARK.paper, 0.92))
+                    .text_size(px(tk::T12))
                     .font_weight(FontWeight::MEDIUM)
-                    .text_color(rgb(tk::DARK.text))
+                    .text_color(rgb(tk::DARK.ink))
                     .child(label),
             )
             .child(
@@ -293,9 +293,9 @@ impl Render for Selector {
                     .px_3()
                     .py_1p5()
                     .rounded_full()
-                    .bg(hsla(0., 0., 0., 0.8))
-                    .text_xs()
-                    .text_color(rgb(tk::DARK.text))
+                    .bg(tk::alpha(tk::DARK.paper, 0.92))
+                    .text_size(px(tk::T12))
+                    .text_color(rgb(tk::DARK.ink))
                     .cursor_pointer()
                     .child("Cancel")
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -307,12 +307,12 @@ impl Render for Selector {
                     .px_3()
                     .py_1p5()
                     .rounded_full()
-                    .bg(rgb(tk::DARK.green))
-                    .text_xs()
+                    .bg(rgb(tk::DARK.ink))
+                    .text_size(px(tk::T12))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(rgb(tk::DARK.on_green))
+                    .text_color(rgb(tk::DARK.paper))
                     .cursor_pointer()
-                    .child("Confirm  ↵")
+                    .child("Confirm")
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .on_click(cx.listener(|this, _, window, cx| this.confirm(window, cx))),
             );
@@ -329,7 +329,7 @@ impl Render for Selector {
                     .w(px(w + 2.0))
                     .h(px(h + 2.0))
                     .border_2()
-                    .border_color(rgb(tk::DARK.green))
+                    .border_color(rgb(tk::DARK.ink))
                     .cursor_move(),
             )
             .children(handles)
@@ -346,7 +346,8 @@ impl Render for RegionBorder {
         // The window is the region grown by `BORDER_GAP`; the outline is in that margin, so
         // it stays outside the recorded area.
         div().size_full().p(px(BORDER_GAP - 3.0)).child(
-            div().size_full().border_2().border_color(hsla(0.0, 0.85, 0.6, 0.9)).rounded(px(4.)),
+            // The recording indicator around the region: coral.
+            div().size_full().border_2().border_color(tk::alpha(tk::DARK.coral, 0.9)).rounded(px(4.)),
         )
     }
 }
