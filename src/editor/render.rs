@@ -71,7 +71,8 @@ pub fn render(doc: &Document, base: &RgbaImage, scale: f32, cache: &Cache) -> Rg
 
 pub fn render_pixmap(doc: &Document, base: &RgbaImage, scale: f32, cache: &Cache) -> Pixmap {
     let content = render_content(doc, base, scale, cache);
-    if !doc.frame.enabled {
+    // A board paints the background itself (see `Document::layout`): one background only.
+    if !doc.frame.enabled || doc.board.is_some() {
         return content;
     }
     compose_frame(doc, &content, scale, cache)

@@ -19,6 +19,11 @@ enum Target {
 }
 
 const RECENT: usize = 8;
+/// A recent-shot tile (border included). The picture inside is sized in points, not
+/// `size_full`: with a percentage height it took its own aspect and spilled tall pictures
+/// over the tiles below.
+const TILE_W: f32 = 124.0;
+const TILE_H: f32 = 80.0;
 
 impl Clipper {
     /// At launch: the always-on screenshot hotkey, leftover deletes, recent shots, fonts.
@@ -76,7 +81,10 @@ impl Clipper {
         crate::menubar::set_dock_icon_visible(true);
         let main = self.main_window;
         cx.defer(move |cx| {
-            let _ = main.update(cx, |_, window, _| crate::menubar::show_window(window));
+            let _ = main.update(cx, |_, window, _| {
+                crate::menubar::show_window(window);
+                window.activate_window();
+            });
             cx.activate(true);
         });
     }
@@ -122,15 +130,20 @@ impl Clipper {
         .detach();
     }
 
+    /// A screenshot in the Shots tab's mode and delay (the button and the hotkey).
     pub(crate) fn take_screenshot(&mut self, from_button: bool, cx: &mut Context<Self>) {
+        self.capture(self.shot.mode, self.shot.delay, from_button, cx);
+    }
+
+    /// A screenshot in `mode` after `delay` seconds (the menu bar's items pass their own).
+    pub(crate) fn capture(&mut self, mode: Mode, delay: u8, from_button: bool, cx: &mut Context<Self>) {
         if self.shot_busy || self.selector.is_some() {
             return;
         }
         let Some(display) = capture::display_under_cursor() else { return };
         self.shot_busy = true;
         let this = cx.entity();
-        let mode = self.shot.mode;
-        let settings = self.shot.clone();
+        let settings = screenshot::Settings { mode, delay, ..self.shot.clone() };
         if from_button && mode != Mode::Full {
             let _ = self.main_window.update(cx, |_, window, _| window.minimize_window());
         }
@@ -323,14 +336,16 @@ impl Clipper {
                 div()
                     .id(("recent", i))
                     .relative()
-                    .w(px(124.))
-                    .h(px(80.))
+                    .flex_none()
+                    .w(px(TILE_W))
+                    .h(px(TILE_H))
+                    .overflow_hidden()
                     .rounded(px(10.))
                     .border_2()
                     .border_color(if picked { gpui_kit::Hsla::from(rgb(crate::GREEN)) } else { crate::ui::hairline() })
                     .cursor_pointer()
                     .hover(|d| d.border_color(rgb(TEXT)))
-                    .child(img(thumb.clone()).size_full().rounded(px(8.)).object_fit(ObjectFit::Cover))
+                    .child(img(thumb.clone()).w(px(TILE_W - 4.)).h(px(TILE_H - 4.)).flex_none().rounded(px(8.)).object_fit(ObjectFit::Cover))
                     .child(check)
                     .on_click(move |_: &ClickEvent, _, cx| crate::editor::view::open(open_path.clone(), cx)),
             );

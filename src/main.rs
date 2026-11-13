@@ -570,7 +570,8 @@ impl Clipper {
         }
         for action in menubar::take_actions() {
             match action {
-                menubar::Action::Screenshot => self.take_screenshot(false, cx),
+                menubar::Action::ShotFull => self.capture(screenshot::Mode::Full, 0, false, cx),
+                menubar::Action::ShotRegion => self.capture(screenshot::Mode::Region, 0, false, cx),
                 menubar::Action::EditImage => {
                     cx.activate(true);
                     self.choose_images(cx);
@@ -2124,7 +2125,11 @@ fn main() {
         }
         return;
     }
-    gpui_kit::application().with_assets(gpui_kit::assets::Assets).run(|cx: &mut App| {
+    let app = gpui_kit::application().with_assets(gpui_kit::assets::Assets);
+    // Clicking the Dock icon (or opening Clipper.app again) while it lives in the menu bar
+    // brings the main window back, like the menu's Open Clipper.
+    app.on_reopen(|_| menubar::request(menubar::Action::Open));
+    app.run(|cx: &mut App| {
         gpui_kit::init(cx);
         apply_theme(cx);
 

@@ -409,9 +409,36 @@ unsafe extern "C" {
     fn objc_msgSend();
 }
 
+#[link(name = "CoreGraphics", kind = "framework")]
+unsafe extern "C" {
+    fn _CGSDefaultConnection() -> i32;
+    fn CGSSetConnectionProperty(cid: i32, target: i32, key: *const c_void, value: *const c_void) -> i32;
+}
+
+#[link(name = "CoreFoundation", kind = "framework")]
+unsafe extern "C" {
+    static kCFBooleanTrue: *const c_void;
+    fn CFStringCreateWithCString(alloc: *const c_void, s: *const c_char, encoding: u32) -> *const c_void;
+}
+
+/// Lets Clipper change the mouse pointer while another app is frontmost. The overlays
+/// (screenshot cards, selector) never activate Clipper, and without this macOS ignores
+/// their hand/resize cursors. The same switch other screenshot tools use.
+fn allow_background_cursor() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| unsafe {
+        let key = CFStringCreateWithCString(std::ptr::null(), c"SetsCursorInBackground".as_ptr(), 0x0800_0100); // UTF-8
+        if !key.is_null() {
+            let cid = _CGSDefaultConnection();
+            CGSSetConnectionProperty(cid, cid, key, kCFBooleanTrue);
+        }
+    });
+}
+
 /// Borderless, no shadow, at window `level`, hidden from screen capture, optionally
 /// click-through, placed at `frame` (x, y, w, h in global top-left points).
 pub(crate) fn overlay_window(window: &Window, level: isize, click_through: bool, frame: (f64, f64, f64, f64)) {
+    allow_background_cursor();
     let Ok(handle) = HasWindowHandle::window_handle(window) else { return };
     let RawWindowHandle::AppKit(h) = handle.as_raw() else { return };
     unsafe {

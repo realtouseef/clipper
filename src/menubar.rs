@@ -1,5 +1,5 @@
-//! Clipper in the menu bar: a small mascot icon with Take Screenshot, Record, Open Clipper
-//! and Quit, so the app keeps running in the background after its window is closed.
+//! Clipper in the menu bar: a small mascot icon with Capture Full Screen, Capture Region,
+//! Record, Open Clipper and Quit, so the app keeps running in the background after its window is closed.
 //!
 //! The status item is plain AppKit (through the Objective-C runtime). Menu picks set a bit
 //! that the app's tick drains with `take_actions`, like the global hotkeys.
@@ -10,7 +10,10 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Action {
-    Screenshot,
+    /// The whole screen under the pointer, right away (no delay).
+    ShotFull,
+    /// Drag out a region, then capture it (no delay).
+    ShotRegion,
     EditImage,
     Record,
     Open,
@@ -18,13 +21,18 @@ pub enum Action {
 }
 
 impl Action {
-    const ALL: [Action; 5] = [Action::Screenshot, Action::EditImage, Action::Record, Action::Open, Action::Quit];
+    const ALL: [Action; 6] = [Action::ShotFull, Action::ShotRegion, Action::EditImage, Action::Record, Action::Open, Action::Quit];
     fn tag(self) -> isize {
         self as isize
     }
 }
 
 static PICKED: AtomicU32 = AtomicU32::new(0);
+
+/// Queues an action as if it were picked from the menu (the Dock icon's reopen uses `Open`).
+pub fn request(action: Action) {
+    PICKED.fetch_or(1 << action.tag(), Ordering::SeqCst);
+}
 
 /// Menu picks since the last call.
 pub fn take_actions() -> Vec<Action> {
@@ -150,9 +158,9 @@ pub fn install(shortcut: &str) {
                 send_int(mi, c"setKeyEquivalentModifierMask:", mods);
             }
         };
-        // Show the screenshot hotkey (e.g. "⌃⇧S") next to its item when it's the default.
-        let (key, mods) = if shortcut == "⌃⇧S" { ("s", (1 << 18) | (1 << 17)) } else { ("", 0) };
-        add("Take Screenshot", Action::Screenshot, key, mods);
+        let _ = shortcut; // the hotkey follows the Shots tab's mode, so it isn't shown on either
+        add("Capture Full Screen", Action::ShotFull, "", 0);
+        add("Capture Region…", Action::ShotRegion, "", 0);
         add("Edit Image…", Action::EditImage, "", 0);
         add("Record Screen", Action::Record, "", 0);
         send1(menu, c"addItem:", send0(class(c"NSMenuItem"), c"separatorItem"));
@@ -160,6 +168,14 @@ pub fn install(shortcut: &str) {
         send1(menu, c"addItem:", send0(class(c"NSMenuItem"), c"separatorItem"));
         add("Quit Clipper", Action::Quit, "q", 1 << 20);
         send1(item, c"setMenu:", menu);
+
+        // Living in the menu bar with no window, macOS App Nap throttles Clipper's timers, so
+        // a menu pick or hotkey waited seconds for the next tick. Opt out for the app's life.
+        let info = send0(class(c"NSProcessInfo"), c"processInfo");
+        let begin: extern "C" fn(Id, Id, u64, Id) -> Id = std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+        // NSActivityUserInitiatedAllowingIdleSystemSleep: no App Nap, the Mac may still sleep.
+        let token = begin(info, sel(c"beginActivityWithOptions:reason:"), 0x00FF_FFFF & !(1u64 << 20), nsstring("Menu bar, hotkeys and screenshot cards"));
+        send0(token, c"retain");
     }
 }
 

@@ -397,6 +397,29 @@ struct Toast {
 }
 
 const HANDLE: f32 = 9.0;
+/// Room the picture may be panned past its edge, in points (the same as around it at Fit).
+const PAN_MARGIN: f32 = 24.0;
+
+/// Keeps the picture in view: centered along an axis where it fits, and panned no further
+/// than its edge plus a margin where it doesn't. (The canvas used to pan away for ever.)
+fn clamp_pan(pan: (f32, f32), k: f32, canvas: (u32, u32), view: (f32, f32)) -> (f32, f32) {
+    let axis = |p: f32, size: u32, v: f32| {
+        let slack = ((size as f32 * k - v) / 2.0 + PAN_MARGIN).max(0.0);
+        p.clamp(-slack, slack)
+    };
+    (axis(pan.0, canvas.0, view.0), axis(pan.1, canvas.1, view.1))
+}
+
+/// The resize cursor for a handle on edge `ex`, `ey` (-1 left/top, 1 right/bottom).
+fn resize_cursor(ex: i8, ey: i8) -> gpui_kit::CursorStyle {
+    use gpui_kit::CursorStyle as C;
+    match (ex, ey) {
+        (0, _) => C::ResizeUpDown,
+        (_, 0) => C::ResizeLeftRight,
+        (a, b) if a == b => C::ResizeUpLeftDownRight,
+        _ => C::ResizeUpRightDownLeft,
+    }
+}
 /// Selection and handles: the system's selection blue (distinct from the green accent, and
 /// visible on screenshots full of green).
 const SELECT: u32 = 0x0a84ff;
@@ -432,6 +455,8 @@ pub struct EditorView {
     /// None = fit.
     zoom: Option<f32>,
     pan: (f32, f32),
+    /// The handle under the pointer (no button down), for its resize cursor.
+    hover: Option<Handle>,
     space: bool,
     view: Rc<Cell<Bounds<Pixels>>>,
     image: Option<Arc<RenderImage>>,
@@ -553,6 +578,7 @@ fn write_board_preview(doc: &Document, path: &std::path::Path) -> anyhow::Result
 pub fn open(path: PathBuf, cx: &mut App) {
     if let Some(h) = cx.try_global::<Open>().and_then(|o| o.0.get(&path).copied()) {
         if h.update(cx, |_, window, _| window.activate_window()).is_ok() {
+            cx.activate(true);
             return;
         }
     }
@@ -602,6 +628,10 @@ pub fn open(path: PathBuf, cx: &mut App) {
                 true
             });
         });
+        // Opened from a screenshot card or the menu bar, Clipper isn't the active app: take
+        // focus so the editor lands in front of whatever is open, not behind it.
+        cx.activate(true);
+        let _ = handle.update(cx, |_, window, _| window.activate_window());
     }
 }
 
@@ -695,6 +725,7 @@ impl EditorView {
             guides: (Vec::new(), Vec::new()),
             zoom: None,
             pan: (0.0, 0.0),
+            hover: None,
             space: false,
             view: Rc::new(Cell::new(Bounds::default())),
             image: None,
@@ -1460,12 +1491,22 @@ impl EditorView {
         let k = self.k(lay.canvas);
         let b = self.view.get();
         let (bx, by, bw, bh) = (f32::from(b.origin.x), f32::from(b.origin.y), f32::from(b.size.width), f32::from(b.size.height));
-        let ox = bx + (bw - lay.canvas.0 as f32 * k) / 2.0 + self.pan.0;
-        let oy = by + (bh - lay.canvas.1 as f32 * k) / 2.0 + self.pan.1;
+        let pan = clamp_pan(self.pan, k, lay.canvas, (bw, bh));
+        let ox = bx + (bw - lay.canvas.0 as f32 * k) / 2.0 + pan.0;
+        let oy = by + (bh - lay.canvas.1 as f32 * k) / 2.0 + pan.1;
         Map { ox, oy, k, crop: d.crop, content: lay.content, lscale: lay.scale }
     }
 
     /// Render scale for the shown size (`scale_factor` from the window when known).
+    /// Pulls the pan back inside `clamp_pan`'s bounds (after panning or zooming), so
+    /// overscroll doesn't pile up out of sight.
+    fn settle_pan(&mut self) {
+        let canvas = self.display_doc().layout().canvas;
+        let k = self.k(canvas);
+        let b = self.view.get();
+        self.pan = clamp_pan(self.pan, k, canvas, (f32::from(b.size.width), f32::from(b.size.height)));
+    }
+
     fn render_scale(&self, scale_factor: Option<f32>) -> f32 {
         let d = self.display_doc();
         let k = self.k(d.layout().canvas);
@@ -2136,7 +2177,30 @@ impl EditorView {
         cx.notify();
     }
 
+    /// The handle under `s` (screen points): the crop frame's in the crop tool, else the
+    /// selection's.
+    fn handle_under(&self, s: P) -> Option<Handle> {
+        let map = self.map();
+        let q = map.to_doc(s);
+        let tol = HANDLE / map.unit();
+        if self.tool == Tool::Crop {
+            let c = self.doc.crop;
+            return [(-1i8, -1i8), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0)]
+                .into_iter()
+                .find(|(ex, ey)| p(c.center().x + *ex as f32 * c.w / 2.0, c.center().y + *ey as f32 * c.h / 2.0).dist(q) <= tol * 1.5)
+                .map(|(ex, ey)| Handle::Resize(ex, ey));
+        }
+        self.selected().filter(|o| !o.locked).and_then(|o| canvas::handle_at(o, q, map.unit(), tol))
+    }
+
     fn on_move(&mut self, ev: &MouseMoveEvent, _: &mut Window, cx: &mut Context<Self>) {
+        if self.drag.is_none() {
+            let hover = self.handle_under(p(f32::from(ev.position.x), f32::from(ev.position.y)));
+            if hover != self.hover {
+                self.hover = hover;
+                cx.notify();
+            }
+        }
         let Some(drag) = self.drag.clone() else { return };
         if ev.pressed_button.is_none() {
             return;
@@ -2148,6 +2212,7 @@ impl EditorView {
         match drag {
             Drag::Pan { start, orig } => {
                 self.pan = (orig.0 + s.x - start.0, orig.1 + s.y - start.1);
+                self.settle_pan();
                 cx.notify();
                 return;
             }
@@ -2352,7 +2417,8 @@ impl EditorView {
         let d = self.display_doc();
         let out = d.layout().canvas;
         let k = self.k(out);
-        let nk = (k * factor).clamp(0.02, 16.0);
+        // No further out than Fit: the picture never shrinks into a sea of empty canvas.
+        let nk = (k * factor).max(self.fit_k(out).min(16.0)).min(16.0);
         let b = self.view.get();
         let (bx, by, bw, bh) = (f32::from(b.origin.x), f32::from(b.origin.y), f32::from(b.size.width), f32::from(b.size.height));
         let center = |kk: f32| (bx + (bw - out.0 as f32 * kk) / 2.0, by + (bh - out.1 as f32 * kk) / 2.0);
@@ -2364,6 +2430,7 @@ impl EditorView {
         let (cx1, cy1) = center(nk);
         self.pan = (new_origin.0 - cx1, new_origin.1 - cy1);
         self.zoom = Some(nk);
+        self.settle_pan();
         self.request_render(cx);
         cx.notify();
     }
@@ -2942,8 +3009,22 @@ impl Render for EditorView {
         let (bx, by) = (f32::from(b.origin.x), f32::from(b.origin.y));
         let store = self.view.clone();
         let space = self.space;
+        // A handle being dragged, else the one under the pointer.
+        let handle = match &self.drag {
+            Some(Drag::Resize { ex, ey, .. }) => Some(Handle::Resize(*ex, *ey)),
+            Some(Drag::Crop { ex, ey, .. }) if *ex != 0 || *ey != 0 => Some(Handle::Resize(*ex, *ey)),
+            Some(Drag::Rotate { .. }) => Some(Handle::Rotate),
+            Some(_) => None,
+            None => self.hover,
+        };
         let cursor_style = if space || matches!(self.drag, Some(Drag::Pan { .. })) {
             gpui_kit::CursorStyle::OpenHand
+        } else if let Some(Handle::Resize(ex, ey)) = handle {
+            resize_cursor(ex, ey)
+        } else if let Some(Handle::Rotate) = handle {
+            gpui_kit::CursorStyle::ClosedHand
+        } else if handle.is_some() || matches!(self.drag, Some(Drag::Point { .. } | Drag::Anchor { .. } | Drag::Tangent { .. })) {
+            gpui_kit::CursorStyle::PointingHand
         } else if self.tool.creates() || self.tool == Tool::Crop {
             gpui_kit::CursorStyle::Crosshair
         } else {
@@ -2983,6 +3064,7 @@ impl Render for EditorView {
                         if v.zoom.is_none() {
                             v.zoom = Some(v.k(v.display_doc().layout().canvas));
                         }
+                        v.settle_pan();
                         cx.notify();
                     }
                     ScrollDelta::Pixels(d) => v.zoom_by((1.0 + f32::from(d.y) * 0.01).clamp(0.5, 2.0), Some(at), cx),
@@ -3085,5 +3167,21 @@ mod render_state_tests {
         // ...but not while still dragging (the next change renders another draft).
         r.started(true);
         assert!(!r.finished(true));
+    }
+}
+
+#[cfg(test)]
+mod pan_tests {
+    use super::{PAN_MARGIN, clamp_pan};
+
+    #[test]
+    fn the_picture_stays_in_view() {
+        // Fits (400 × 300 at 1× in an 800 × 600 view): stays centered.
+        assert_eq!(clamp_pan((500.0, -900.0), 1.0, (400, 300), (800.0, 600.0)), (0.0, 0.0));
+        // Bigger than the view: up to its edge plus the margin, no further.
+        let slack = (2000.0 - 800.0) / 2.0 + PAN_MARGIN;
+        assert_eq!(clamp_pan((5000.0, 0.0), 1.0, (2000, 300), (800.0, 600.0)), (slack, 0.0));
+        assert_eq!(clamp_pan((-5000.0, 0.0), 1.0, (2000, 300), (800.0, 600.0)), (-slack, 0.0));
+        assert_eq!(clamp_pan((100.0, 0.0), 1.0, (2000, 300), (800.0, 600.0)), (100.0, 0.0));
     }
 }

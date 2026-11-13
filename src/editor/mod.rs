@@ -60,6 +60,6 @@ pub mod icons {
         camera => "camera", emoji => "smile", layout => "layout-template", captions => "captions",
         settings => "settings-2", monitor => "monitor", region => "square-dashed", zoom => "zoom-in", folder => "folder-open",
         forward => "layers-arrow-up", backward => "layers-arrow-down", image => "image",
-        merge => "images", callout => "scan-search", add_image => "image-plus",
+        merge => "images", callout => "scan-search", add_image => "image-plus", check => "check",
     }
 }

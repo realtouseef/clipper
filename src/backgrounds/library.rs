@@ -152,14 +152,21 @@ pub fn scan_watched_global() -> usize {
         };
         (lib.dir.clone(), lib.new_in_watched())
     };
+    let watched_dir = |p: &Path| p.parent().map(Path::to_path_buf);
     let mut added = 0;
     for p in todo {
         if let Ok(entry) = prepare(&dir, &p) {
             if let Ok(mut lib) = global().lock() {
-                if !lib.data.images.iter().any(|e| e.source.as_deref() == Some(p.as_path())) {
+                // The folder may have been unwatched (or changed) while this one decoded.
+                let still_watched = lib.data.watched.is_some() && lib.data.watched == watched_dir(&p);
+                if still_watched && !lib.data.images.iter().any(|e| e.source.as_deref() == Some(p.as_path())) {
                     lib.data.images.insert(0, entry);
                     lib.save();
                     added += 1;
+                } else {
+                    let _ = std::fs::remove_file(dir.join("originals").join(&entry.file));
+                    let _ = std::fs::remove_file(lib.thumb(&entry.id));
+                    let _ = std::fs::remove_file(lib.proxy(&entry.id));
                 }
             }
         }
@@ -329,7 +336,15 @@ impl Library {
         self.data.watched.as_deref()
     }
 
+    /// Watches `dir` instead (None stops watching). Images that came in from the folder
+    /// that's no longer watched leave the library with it.
     pub fn set_watched(&mut self, dir: Option<PathBuf>) {
+        if let Some(old) = self.data.watched.clone().filter(|old| dir.as_deref() != Some(old.as_path())) {
+            let gone: Vec<String> = self.data.images.iter().filter(|e| e.source.as_deref().is_some_and(|s| s.parent() == Some(old.as_path()))).map(|e| e.id.clone()).collect();
+            for id in gone {
+                self.delete(&id);
+            }
+        }
         self.data.watched = dir;
         self.save();
     }
@@ -414,6 +429,11 @@ mod tests {
         lib.set_watched(Some(watch.clone()));
         assert_eq!(lib.scan_watched().len(), 1);
         assert_eq!(lib.scan_watched().len(), 0);
+        // Unwatching takes the folder's images out; images imported by hand stay.
+        let kept = lib.images().len() - 1;
+        lib.set_watched(None);
+        assert_eq!(lib.images().len(), kept);
+        assert!(lib.images().iter().all(|e| e.source.as_deref().and_then(Path::parent) != Some(watch.as_path())));
         assert!(lib.import(&root.join("nope.gif")).is_err());
         let _ = std::fs::remove_dir_all(&root);
     }

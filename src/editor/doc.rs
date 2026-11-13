@@ -938,7 +938,12 @@ impl Document {
         (self.crop.w.round().max(1.0) as u32, self.crop.h.round().max(1.0) as u32)
     }
 
+    /// Where the content goes in the output. A board is its own frame (its background and
+    /// padding), so the frame never wraps it a second time.
     pub fn layout(&self) -> FrameLayout {
+        if self.board.is_some() {
+            return Frame { enabled: false, ..self.frame.clone() }.layout(self.content_size());
+        }
         self.frame.layout(self.content_size())
     }
 
@@ -1229,7 +1234,9 @@ impl Document {
         let mut imgs: Vec<(u64, R, (f32, f32))> = self
             .objects
             .iter()
-            .filter_map(|o| if let Kind::Image(i) = &o.kind { Some((o.id, i.rect, (i.crop.w, i.crop.h))) } else { None })
+            // Stacked at their current size: an image the user resized keeps that size
+            // (stacking from the natural size snapped it back on release).
+            .filter_map(|o| if let Kind::Image(i) = &o.kind { Some((o.id, i.rect, (i.rect.w, i.rect.h))) } else { None })
             .collect();
         if board.layout != super::merge::BoardLayout::Free {
             match order {
@@ -1542,6 +1549,23 @@ mod tests {
             assert!(d.crop.contains(p(b.x, b.y)) && d.crop.contains(p(b.right(), b.bottom())), "callout {b:?} outside canvas {:?}", d.crop);
             assert!(d.images().iter().all(|i| i.bounds().intersect(&b).is_none()), "callout over an image");
         }
+    }
+
+    #[test]
+    fn resized_board_images_keep_their_size() {
+        use super::super::merge::Board;
+        let imgs = vec![(PathBuf::from("/a.png"), (800, 400)), (PathBuf::from("/b.png"), (400, 300))];
+        let mut d = Document::new_board(&imgs, Board::default());
+        let id = d.images()[1].id;
+        let b = d.get(id).unwrap().bounds();
+        d.get_mut(id).unwrap().set_bounds(r(b.x, b.y, 1200.0, 900.0));
+        d.arrange(None);
+        let after = d.get(id).unwrap().bounds();
+        assert_eq!((after.w, after.h), (1200.0, 900.0), "snapped back to its natural size");
+        assert_eq!(d.size, (1200 + 96, 400 + 24 + 900 + 96), "the canvas grows to fit");
+        // One background: a board's layout ignores the frame.
+        d.frame.enabled = true;
+        assert_eq!(d.layout().canvas, d.size);
     }
 
     #[test]

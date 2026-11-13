@@ -1033,6 +1033,14 @@ impl EditorView {
 
     fn background_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let f = self.doc.frame.clone();
+        // A merged picture always has its background, filling the canvas around the images;
+        // the space around them is the board's padding (Layout).
+        if self.doc.board.is_some() {
+            return vec![
+                Self::hint("The background fills the canvas around the pictures. Set the space around them in Layout.").into_any_element(),
+                self.bg_picker.clone().into_any_element(),
+            ];
+        }
         let mut v = vec![self
             .switch("bg-on", "Background", f.enabled, cx, |v, on, cx| v.doc_action(|d| d.frame.enabled = on, cx))
             .into_any_element()];

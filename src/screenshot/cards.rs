@@ -33,6 +33,8 @@ const TOAST_H: f32 = 56.0;
 const MAX_SHOWN: usize = 4;
 const LIFETIME: Duration = Duration::from_secs(8);
 const UNDO: Duration = Duration::from_secs(5);
+/// How long the "Copied" confirmation stays.
+const COPIED: Duration = Duration::from_secs(2);
 /// Clear of the Dock.
 const BOTTOM: f64 = 96.0;
 
@@ -44,12 +46,28 @@ struct Card {
     hovered: bool,
 }
 
+/// A short message under the cards (one at a time; the undo toast takes precedence).
+enum Notice {
+    /// This screenshot was just copied to the clipboard.
+    Copied(PathBuf),
+    Error(String),
+}
+
+impl Notice {
+    fn lasts(&self) -> Duration {
+        match self {
+            Notice::Copied(_) => COPIED,
+            Notice::Error(_) => UNDO,
+        }
+    }
+}
+
 pub struct Cards {
     cards: Vec<Card>,
     toast: Option<(Pending, Instant)>,
     display: Display,
     last_tick: Instant,
-    error: Option<(String, Instant)>,
+    notice: Option<(Notice, Instant)>,
 }
 
 struct Open(Option<(AnyWindowHandle, Entity<Cards>)>);
@@ -69,16 +87,16 @@ pub fn show(path: PathBuf, display: Display, cx: &mut App) {
 
 /// Shows why a screenshot failed, where its card would have been.
 pub fn show_error(msg: String, display: Display, cx: &mut App) {
-    open_with(Vec::new(), Some(msg), display, cx);
+    open_with(Vec::new(), Some(Notice::Error(msg)), display, cx);
 }
 
-fn open_with(new_cards: Vec<Card>, error: Option<String>, display: Display, cx: &mut App) {
-    let error = error.map(|m| (m, Instant::now()));
+fn open_with(new_cards: Vec<Card>, notice: Option<Notice>, display: Display, cx: &mut App) {
+    let notice = notice.map(|m| (m, Instant::now()));
     if let Some((_, cards)) = cx.try_global::<Open>().and_then(|o| o.0.clone()) {
         cards.update(cx, |c, cx| {
             c.cards.extend(new_cards);
-            if error.is_some() {
-                c.error = error;
+            if notice.is_some() {
+                c.notice = notice;
             }
             c.display = display;
             cx.notify();
@@ -87,7 +105,7 @@ fn open_with(new_cards: Vec<Card>, error: Option<String>, display: Display, cx: 
         return;
     }
     let n = new_cards.len();
-    let has_error = error.is_some();
+    let has_notice = notice.is_some();
     let entity_cards = new_cards;
     let options = WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(gpui_kit::Bounds::new(point(px(0.), px(0.)), size(px(W), px(CARD_H + 2.0 * GAP))))),
@@ -102,13 +120,13 @@ fn open_with(new_cards: Vec<Card>, error: Option<String>, display: Display, cx: 
         ..Default::default()
     };
     let opened = gpui_kit::open_window(options, cx, move |window, cx| {
-        let entity = cx.new(|_| Cards { cards: entity_cards, toast: None, display, last_tick: Instant::now(), error });
-        crate::selector::overlay_window(window, 25, false, frame(&display, height_of(n, has_error)));
-        start_ticker(entity.clone(), window, cx);
+        let entity = cx.new(|_| Cards { cards: entity_cards, toast: None, display, last_tick: Instant::now(), notice });
+        crate::selector::overlay_window(window, 25, false, frame(&display, height_of(n, has_notice)));
         entity
     });
     if let Ok((handle, entity)) = opened {
         crate::selector::clear_root(handle, cx);
+        start_ticker(entity.clone(), cx);
         cx.set_global(Open(Some((handle, entity))));
     }
 }
@@ -143,7 +161,7 @@ fn relayout(cx: &mut App) {
     let Some((handle, cards)) = cx.try_global::<Open>().and_then(|o| o.0.clone()) else { return };
     let (n, toast, display, err) = {
         let c = cards.read(cx);
-        (c.cards.len(), c.toast.is_some(), c.display, c.error.is_some())
+        (c.cards.len(), c.toast.is_some(), c.display, c.notice.is_some())
     };
     if n == 0 && !toast && !err {
         cx.set_global(Open(None));
@@ -154,20 +172,23 @@ fn relayout(cx: &mut App) {
     let _ = handle.update(cx, |_, window, _| crate::selector::overlay_window(window, 25, false, frame(&display, h)));
 }
 
-fn start_ticker(entity: Entity<Cards>, window: &mut Window, cx: &mut App) {
+/// Runs on the app, not inside the cards window: `relayout` has to update (and close) that
+/// window, which it can't do from within the window's own update. Run from there, the
+/// window outlived its last card as an invisible pane that swallowed clicks.
+fn start_ticker(entity: Entity<Cards>, cx: &mut App) {
     let weak = entity.downgrade();
-    window
-        .spawn(cx, async move |cx| {
-            loop {
-                cx.background_executor().timer(Duration::from_millis(200)).await;
-                let Some(entity) = weak.upgrade() else { break };
-                let changed = cx.update(|_, cx| entity.update(cx, |c, cx| c.tick(cx))).unwrap_or(false);
-                if changed {
-                    let _ = cx.update(|_, cx| relayout(cx));
-                }
+    cx.spawn(async move |cx| {
+        loop {
+            cx.background_executor().timer(Duration::from_millis(200)).await;
+            let Some(entity) = weak.upgrade() else { break };
+            let changed = cx.update(|cx| entity.update(cx, |c, cx| c.tick(cx)));
+            drop(entity);
+            if changed {
+                cx.update(relayout);
             }
-        })
-        .detach();
+        }
+    })
+    .detach();
 }
 
 impl Cards {
@@ -176,7 +197,8 @@ impl Cards {
         let now = Instant::now();
         let dt = now - self.last_tick;
         self.last_tick = now;
-        let before = (self.cards.len(), self.toast.is_some(), self.error.is_some());
+        let before = (self.cards.len(), self.toast.is_some(), self.notice.is_some());
+        let countdown = self.toast_seconds();
         for c in self.cards.iter_mut().filter(|c| !c.hovered) {
             c.left = c.left.saturating_sub(dt);
         }
@@ -185,14 +207,20 @@ impl Cards {
             let (p, _) = self.toast.take().unwrap();
             library::finish(&p);
         }
-        if self.error.as_ref().is_some_and(|(_, at)| at.elapsed() >= UNDO) {
-            self.error = None;
+        if self.notice.as_ref().is_some_and(|(n, at)| at.elapsed() >= n.lasts()) {
+            self.notice = None;
         }
-        let after = (self.cards.len(), self.toast.is_some(), self.error.is_some());
-        if before != after {
+        let after = (self.cards.len(), self.toast.is_some(), self.notice.is_some());
+        // The undo toast counts down: redraw when its seconds change.
+        if before != after || countdown != self.toast_seconds() {
             cx.notify();
         }
         before != after
+    }
+
+    /// Whole seconds left to undo a delete (5, 4, … 1).
+    fn toast_seconds(&self) -> Option<u64> {
+        self.toast.as_ref().map(|(_, at)| UNDO.saturating_sub(at.elapsed()).as_secs_f32().ceil() as u64)
     }
 
     fn remove(&mut self, path: &PathBuf, cx: &mut Context<Self>) {
@@ -213,7 +241,7 @@ impl Cards {
         }
         match library::delete(&path) {
             Ok(p) => self.toast = Some((p, Instant::now())),
-            Err(e) => self.error = Some((format!("Could not delete: {e}"), Instant::now())),
+            Err(e) => self.notice = Some((Notice::Error(format!("Could not delete: {e}")), Instant::now())),
         }
         self.remove(&path, cx);
     }
@@ -225,7 +253,7 @@ impl Cards {
                     let card = Card { thumb: thumbnail(&p.original), path: p.original.clone(), left: LIFETIME, hovered: false };
                     self.cards.push(card);
                 }
-                Err(e) => self.error = Some((format!("Could not restore: {e}"), Instant::now())),
+                Err(e) => self.notice = Some((Notice::Error(format!("Could not restore: {e}")), Instant::now())),
             }
         }
         cx.notify();
@@ -234,11 +262,13 @@ impl Cards {
 
     fn copy(&mut self, path: PathBuf, cx: &mut Context<Self>) {
         let result = editor::baked(&path).and_then(|img| editor::copy_image(&img, cx));
-        if let Err(e) = result {
-            self.error = Some((e.to_string(), Instant::now()));
-            cx.notify();
-            cx.defer(relayout);
-        }
+        let notice = match result {
+            Ok(()) => Notice::Copied(path),
+            Err(e) => Notice::Error(e.to_string()),
+        };
+        self.notice = Some((notice, Instant::now()));
+        cx.notify();
+        cx.defer(relayout);
     }
 
     fn save_as(&mut self, path: PathBuf, cx: &mut Context<Self>) {
@@ -258,8 +288,9 @@ impl Cards {
             });
             if let Err(e) = result {
                 let _ = weak.update(cx, |c, cx| {
-                    c.error = Some((e.to_string(), Instant::now()));
+                    c.notice = Some((Notice::Error(e.to_string()), Instant::now()));
                     cx.notify();
+                    cx.defer(relayout);
                 });
             }
         })
@@ -270,6 +301,7 @@ impl Cards {
         let path = c.path.clone();
         let (p1, p2, p3, p4, p5, p6) = (path.clone(), path.clone(), path.clone(), path.clone(), path.clone(), path.clone());
         let name = time_label(path.file_stem().and_then(|n| n.to_str()).unwrap_or(""));
+        let copied = matches!(&self.notice, Some((Notice::Copied(p), _)) if *p == path);
         let icon_btn = |id: String, icon: gpui_kit::component::Icon, tip: &'static str| {
             Button::new(gpui_kit::SharedString::from(id)).cursor_pointer().ghost().xsmall().rounded_full().icon(icon).tooltip(tip)
         };
@@ -298,7 +330,7 @@ impl Cards {
                 })),
             )
             .child(div().flex_1().min_w_0().px(px(ui::S2)).text_xs().text_color(rgb(MUTED)).truncate().child(name))
-            .child(icon_btn(format!("copy-{i}"), icons::copy(), "Copy to clipboard").on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+            .child(icon_btn(format!("copy-{i}"), if copied { icons::check() } else { icons::copy() }, "Copy to clipboard").when(copied, |b| b.text_color(rgb(GREEN))).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                 cx.stop_propagation();
                 this.copy(p3.clone(), cx)
             })))
@@ -358,13 +390,16 @@ impl Render for Cards {
             let el = self.card(i, &self.cards[i], cx).into_any_element();
             col = col.child(el);
         }
-        if let Some((_, at)) = &self.toast {
-            let left = UNDO.saturating_sub(at.elapsed()).as_secs() + 1;
+        let tick = |color: u32| {
+            div().size(px(20.)).flex_none().rounded_full().bg(rgb(color)).flex().items_center().justify_center().child(icons::check().size(px(12.)).text_color(rgb(crate::ON_GREEN)))
+        };
+        if let Some(left) = self.toast_seconds() {
             col = col.child(
                 ui::toast_pill()
+                    .pl(px(ui::S2))
                     .w(px(CARD_W))
                     .justify_between()
-                    .child(format!("Screenshot deleted · {left}s"))
+                    .child(div().flex().items_center().gap(px(ui::S2)).child(tick(GREEN)).child(format!("Deleted · {left}s")))
                     .child(
                         Button::new("undo").cursor_pointer()
                             .ghost()
@@ -375,7 +410,9 @@ impl Render for Cards {
                             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.undo(cx))),
                     ),
             );
-        } else if let Some((msg, _)) = &self.error {
+        } else if let Some((Notice::Copied(_), _)) = &self.notice {
+            col = col.child(ui::toast_pill().pl(px(ui::S2)).pr(px(ui::S4)).child(tick(GREEN)).child("Copied to clipboard"));
+        } else if let Some((Notice::Error(msg), _)) = &self.notice {
             col = col.child(
                 ui::toast_pill()
                     .id("card-error")
