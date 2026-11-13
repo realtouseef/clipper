@@ -410,6 +410,31 @@ fn clamp_pan(pan: (f32, f32), k: f32, canvas: (u32, u32), view: (f32, f32)) -> (
     (axis(pan.0, canvas.0, view.0), axis(pan.1, canvas.1, view.1))
 }
 
+/// A picture resized from `orig` with handle (`ex`, `ey`), keeping its aspect `a`: sized by
+/// whichever edge the pointer pulled furthest (`nb` is the free-form rectangle), with the
+/// corner or edge opposite the handle held in place. It may reach past the canvas.
+fn resize_picture(nb: R, orig: R, ex: i8, ey: i8, a: f32) -> R {
+    let (kw, kh) = (nb.w / orig.w.max(1e-3), nb.h / orig.h.max(1e-3));
+    let k = match (ex, ey) {
+        (0, _) => kh,
+        (_, 0) => kw,
+        _ => if (kw - 1.0).abs() >= (kh - 1.0).abs() { kw } else { kh },
+    };
+    let w = (orig.w * k).max(8.0);
+    let h = w / a;
+    let x = match ex {
+        -1 => orig.right() - w,
+        1 => orig.x,
+        _ => orig.center().x - w / 2.0,
+    };
+    let y = match ey {
+        -1 => orig.bottom() - h,
+        1 => orig.y,
+        _ => orig.center().y - h / 2.0,
+    };
+    r(x, y, w, h)
+}
+
 /// The resize cursor for a handle on edge `ex`, `ey` (-1 left/top, 1 right/bottom).
 fn resize_cursor(ex: i8, ey: i8) -> gpui_kit::CursorStyle {
     use gpui_kit::CursorStyle as C;
@@ -940,6 +965,15 @@ impl EditorView {
     pub(super) fn apply_custom_size(&mut self, cx: &mut Context<Self>) {
         let w = self.custom_w.read(cx).value().trim().parse::<u32>().ok();
         let h = self.custom_h.read(cx).value().trim().parse::<u32>().ok();
+        // On a board the fields size its canvas (Layout); otherwise the frame's output size.
+        if self.doc.board.is_some() {
+            if let (Some(w), Some(h)) = (w, h) {
+                if self.doc.size != (w, h) {
+                    self.doc_action(|d| d.set_board_canvas(w as f32, h as f32), cx);
+                }
+            }
+            return;
+        }
         if let (Some(w), Some(h)) = (w, h) {
             let size = OutputSize::Custom(w.clamp(16, 16000), h.clamp(16, 16000));
             if self.doc.frame.size != size {
@@ -2112,7 +2146,9 @@ impl EditorView {
             self.sel_anchor = None;
         }
         match self.tool {
-            Tool::Select | Tool::Background => {
+            // Merge too: after adding a picture you're in Merge, and clicks there have to
+            // pick and move the pictures (it draws nothing).
+            Tool::Select | Tool::Background | Tool::Merge => {
                 if ev.click_count >= 2 {
                     if let Some(id) = hit.filter(|id| matches!(self.doc.get(*id), Some(Object { kind: Kind::Text(_), locked: false, .. }))) {
                         self.start_editing(id, cx);
@@ -2243,7 +2279,12 @@ impl EditorView {
             }
             Drag::Resize { orig, ex, ey } => {
                 let keep_aspect = shift || matches!(orig.kind, Kind::Text(_) | Kind::Emoji(_) | Kind::Step(_));
-                let nb = canvas::resize(&orig, ex, ey, q, keep_aspect);
+                let mut nb = canvas::resize(&orig, ex, ey, q, keep_aspect);
+                // Pictures keep their aspect, sized from the handle being dragged (the top and
+                // bottom handles used to do nothing).
+                if let (Kind::Image(im), 0.0) = (&orig.kind, orig.rotation) {
+                    nb = resize_picture(nb, orig.bounds(), ex, ey, im.crop.w / im.crop.h.max(1e-3));
+                }
                 if let Some(cur) = self.doc.get_mut(orig.id) {
                     *cur = orig.clone();
                     cur.set_bounds(nb);
@@ -2402,9 +2443,24 @@ impl EditorView {
                 }
             }
         }
-        // A board fits its canvas (and re-stacks its images) after anything moved.
+        // A board re-stacks its images after anything moved; its canvas stays as it is
+        // (Layout → Canvas sets it, or fits it to the pictures).
         if self.doc.board.is_some() && matches!(drag, Drag::Move { .. } | Drag::Resize { .. } | Drag::Rotate { .. } | Drag::Create { .. }) {
-            self.doc.arrange(None);
+            // A picture sized by hand stays exactly where and how big it was left, even over
+            // another one: re-stacking would push its neighbours along (and matching would
+            // scale it back). The board switches to Free, which Layout shows.
+            if let Drag::Resize { orig: Object { id, kind: Kind::Image(_), .. }, .. } = &drag {
+                if let Some(b) = self.doc.board.as_mut() {
+                    b.layout = super::merge::BoardLayout::Free;
+                    b.matching = super::merge::Match::None;
+                }
+                // Grown over another picture: it covers that one.
+                let mine = self.doc.get(*id).map(|o| o.outer_bounds());
+                if mine.is_some_and(|m| self.doc.images().iter().any(|o| o.id != *id && o.outer_bounds().intersect(&m).is_some())) {
+                    self.doc.reorder(*id, Order::Front);
+                }
+            }
+            self.doc.restack();
         }
         if !matches!(drag, Drag::Pan { .. }) {
             self.history.discard_if_unchanged(&self.doc);
@@ -3172,7 +3228,19 @@ mod render_state_tests {
 
 #[cfg(test)]
 mod pan_tests {
-    use super::{PAN_MARGIN, clamp_pan};
+    use super::super::doc::r;
+    use super::{PAN_MARGIN, clamp_pan, resize_picture};
+
+    #[test]
+    fn pictures_resize_from_the_dragged_handle_past_the_canvas() {
+        let orig = r(100.0, 100.0, 400.0, 200.0);
+        // Bottom-right corner pulled far out: grows past any canvas, top-left held.
+        assert_eq!(resize_picture(r(100.0, 100.0, 1500.0, 750.0), orig, 1, 1, 2.0), r(100.0, 100.0, 1500.0, 750.0));
+        // Bottom edge: height drives the size, centered horizontally, top held.
+        assert_eq!(resize_picture(r(100.0, 100.0, 400.0, 400.0), orig, 0, 1, 2.0), r(-100.0, 100.0, 800.0, 400.0));
+        // Top-left corner: bottom-right held.
+        assert_eq!(resize_picture(r(-300.0, -100.0, 800.0, 400.0), orig, -1, -1, 2.0), r(-300.0, -100.0, 800.0, 400.0));
+    }
 
     #[test]
     fn the_picture_stays_in_view() {

@@ -190,7 +190,7 @@ impl EditorView {
             ],
             Tool::Arrow => self.arrow_panel(cx),
             Tool::Callout => self.callout_panel(cx),
-            Tool::Merge => self.merge_panel(cx),
+            Tool::Merge => self.merge_panel(window, cx),
             Tool::Line | Tool::Pen => vec![
                 row("Color", self.swatches(Slot::Stroke, false, &super::view::palette(), cx)).into_any_element(),
                 self.slider(Prop::Width, "Thickness", cx).into_any_element(),
@@ -527,7 +527,7 @@ impl EditorView {
         v
     }
 
-    fn merge_panel(&mut self, cx: &mut Context<Self>) -> Vec<AnyElement> {
+    fn merge_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let mut v: Vec<AnyElement> = Vec::new();
         let add = Button::new("add-image")
             .cursor_pointer()
@@ -628,15 +628,52 @@ impl EditorView {
                     .into_any_element(),
             );
         } else {
-            v.push(Self::hint("Drag the images anywhere; the canvas grows to fit.").into_any_element());
+            v.push(Self::hint("Drag the images anywhere on the canvas.").into_any_element());
         }
         v.push(add.into_any_element());
         v.push(section("Canvas").into_any_element());
+        let (cw, ch) = self.doc.size;
+        self.sync_custom_inputs(cw, ch, window, cx);
+        let fixed = board.canvas.is_some();
+        v.push(
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(Input::new(&self.custom_w).small())
+                .child("×")
+                .child(Input::new(&self.custom_h).small())
+                .child("px")
+                .into_any_element(),
+        );
+        v.push(
+            Button::new("b-fit")
+                .cursor_pointer()
+                .secondary()
+                .small()
+                .w_full()
+                .label("Fit to pictures")
+                .selected(!fixed)
+                .tooltip("Size the canvas to the pictures plus padding")
+                .on_click(cx.listener(|v, _: &ClickEvent, _, cx| v.doc_action(|d| d.fit_board(), cx)))
+                .into_any_element(),
+        );
+        v.push(
+            Self::hint(if fixed {
+                "Fixed size: pictures are centered on it. Press Enter to apply a new size."
+            } else {
+                "Resizing or moving a picture keeps this size. Type a size and press Enter to set your own."
+            })
+            .into_any_element(),
+        );
         v.push(self.slider(Prop::BoardPad, "Padding", cx).into_any_element());
-        v.push(self.slider(Prop::ExpandL, "Extra left", cx).into_any_element());
-        v.push(self.slider(Prop::ExpandR, "Extra right", cx).into_any_element());
-        v.push(self.slider(Prop::ExpandT, "Extra top", cx).into_any_element());
-        v.push(self.slider(Prop::ExpandB, "Extra bottom", cx).into_any_element());
+        // The extra space on each side only applies while the canvas fits the pictures.
+        if !fixed {
+            v.push(self.slider(Prop::ExpandL, "Extra left", cx).into_any_element());
+            v.push(self.slider(Prop::ExpandR, "Extra right", cx).into_any_element());
+            v.push(self.slider(Prop::ExpandT, "Extra top", cx).into_any_element());
+            v.push(self.slider(Prop::ExpandB, "Extra bottom", cx).into_any_element());
+        }
         v.push(
             Button::new("b-bg")
                 .cursor_pointer()

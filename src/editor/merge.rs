@@ -42,11 +42,16 @@ pub struct Board {
     pub padding: f32,
     /// Extra canvas on each side (left, top, right, bottom), for callouts outside the images.
     pub expand: [f32; 4],
+    /// A canvas size the user typed in (pixels). None: the canvas fits the images (plus
+    /// padding and expansion) whenever the layout changes. Either way, moving or resizing an
+    /// image never changes it.
+    #[serde(default)]
+    pub canvas: Option<(f32, f32)>,
 }
 
 impl Default for Board {
     fn default() -> Self {
-        Self { layout: BoardLayout::Vertical, gap: 24.0, separator: None, align: BoardAlign::Center, matching: Match::None, padding: 48.0, expand: [0.0; 4] }
+        Self { layout: BoardLayout::Vertical, gap: 24.0, separator: None, align: BoardAlign::Center, matching: Match::None, padding: 48.0, expand: [0.0; 4], canvas: None }
     }
 }
 

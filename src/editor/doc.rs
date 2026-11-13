@@ -1172,6 +1172,19 @@ impl Document {
         let margin = (board.padding / 2.0).max(16.0);
         let c = self.crop;
         let need = [c.x - (area.x - margin), c.y - (area.y - margin), area.right() + margin - c.right(), area.bottom() + margin - c.bottom()];
+        // A typed-in canvas: grow it on the sides that need room, keeping everything in place.
+        if let Some((w, h)) = board.canvas {
+            let [l, t, rr, b] = need.map(|n| n.max(0.0).ceil());
+            board.canvas = Some((w + l + rr, h + t + b));
+            for o in &mut self.objects {
+                o.translate(l, t);
+            }
+            let (w, h) = (w + l + rr, h + t + b);
+            self.size = (w as u32, h as u32);
+            self.crop = r(0.0, 0.0, w, h);
+            self.sync_links();
+            return;
+        }
         for (e, n) in board.expand.iter_mut().zip(need) {
             if n > 0.0 {
                 *e += n.ceil();
@@ -1227,9 +1240,36 @@ impl Document {
     }
 
     /// Lays out a board: stacks the images (in `order`, else by where they are along the
-    /// stack) and fits the canvas around them plus padding and any expansion. Objects on an
-    /// image move with it; everything shifts together when the canvas grows on the left/top.
+    /// stack) and fits the canvas around them plus padding and any expansion (or, with a
+    /// size typed in, centers them on that canvas). Objects on an image move with it;
+    /// everything shifts together when the canvas grows on the left/top.
     pub fn arrange(&mut self, order: Option<&[u64]>) {
+        self.layout_board(order, true);
+    }
+
+    /// After an image was moved or resized by hand: re-stacks the images but leaves the
+    /// canvas exactly as it is (it used to grow around a resized image).
+    pub fn restack(&mut self) {
+        self.layout_board(None, false);
+    }
+
+    /// The board canvas follows the images again (forgets a typed-in size).
+    pub fn fit_board(&mut self) {
+        if let Some(b) = self.board.as_mut() {
+            b.canvas = None;
+        }
+        self.arrange(None);
+    }
+
+    /// Sets the board canvas to `w` × `h` pixels; the images are centered on it.
+    pub fn set_board_canvas(&mut self, w: f32, h: f32) {
+        if let Some(b) = self.board.as_mut() {
+            b.canvas = Some((w.round().clamp(16.0, 16000.0), h.round().clamp(16.0, 16000.0)));
+        }
+        self.arrange(None);
+    }
+
+    fn layout_board(&mut self, order: Option<&[u64]>, fit: bool) {
         let Some(board) = self.board.clone() else { return };
         let mut imgs: Vec<(u64, R, (f32, f32))> = self
             .objects
@@ -1258,14 +1298,22 @@ impl Document {
         }
         let rects: Vec<R> = self.images().iter().map(|o| o.outer_bounds()).collect();
         let Some(bbox) = rects.iter().skip(1).fold(rects.first().copied(), |a, b| a.map(|a| a.union(b))) else { return };
+        if !fit {
+            self.sync_links();
+            return;
+        }
         let [el, et, er, eb] = board.expand.map(|v| v.max(0.0));
-        let (pad, dx, dy) = (board.padding.max(0.0), board.padding.max(0.0) + el - bbox.x, board.padding.max(0.0) + et - bbox.y);
+        let pad = board.padding.max(0.0);
+        let (w, h, dx, dy) = match board.canvas {
+            // A typed-in size: the images centered on it.
+            Some((w, h)) => (w, h, ((w - bbox.w) / 2.0 - bbox.x).round(), ((h - bbox.h) / 2.0 - bbox.y).round()),
+            None => ((bbox.w + 2.0 * pad + el + er).round().max(16.0), (bbox.h + 2.0 * pad + et + eb).round().max(16.0), pad + el - bbox.x, pad + et - bbox.y),
+        };
         if dx.abs() > 1e-3 || dy.abs() > 1e-3 {
             for o in &mut self.objects {
                 o.translate(dx, dy);
             }
         }
-        let (w, h) = ((bbox.w + 2.0 * pad + el + er).round().max(16.0), (bbox.h + 2.0 * pad + et + eb).round().max(16.0));
         self.size = (w as u32, h as u32);
         self.orient = Orient::default();
         self.crop = r(0.0, 0.0, w, h);
@@ -1558,11 +1606,35 @@ mod tests {
         let mut d = Document::new_board(&imgs, Board::default());
         let id = d.images()[1].id;
         let b = d.get(id).unwrap().bounds();
+        let before = d.size;
         d.get_mut(id).unwrap().set_bounds(r(b.x, b.y, 1200.0, 900.0));
-        d.arrange(None);
+        // Resized by hand: the canvas stays as it was.
+        d.restack();
         let after = d.get(id).unwrap().bounds();
         assert_eq!((after.w, after.h), (1200.0, 900.0), "snapped back to its natural size");
-        assert_eq!(d.size, (1200 + 96, 400 + 24 + 900 + 96), "the canvas grows to fit");
+        assert_eq!(d.size, before, "a hand resize changed the canvas");
+        // Fit to pictures: the canvas follows them again.
+        d.fit_board();
+        assert_eq!(d.size, (1200 + 96, 400 + 24 + 900 + 96));
+        // A typed-in size sticks, with the pictures centered on it.
+        d.set_board_canvas(2000.0, 1600.0);
+        assert_eq!(d.size, (2000, 1600));
+        let bbox = d.images().iter().map(|o| o.outer_bounds()).reduce(|a, b| a.union(&b)).unwrap();
+        assert!((bbox.center().x - 1000.0).abs() < 1.0 && (bbox.center().y - 800.0).abs() < 1.0, "{bbox:?}");
+        d.restack();
+        assert_eq!(d.size, (2000, 1600));
+        // Saved with the project.
+        assert_eq!(Document::from_json(&d.to_json()).unwrap().board.unwrap().canvas, Some((2000.0, 1600.0)));
+        // Free layout: a picture grown over its neighbour stays put, and so does the neighbour.
+        d.board.as_mut().unwrap().layout = super::super::merge::BoardLayout::Free;
+        let other = d.images()[0].id;
+        let other_before = d.get(other).unwrap().bounds();
+        let b = d.get(id).unwrap().bounds();
+        d.get_mut(id).unwrap().set_bounds(r(other_before.x, other_before.y, b.w * 1.5, b.h * 1.5));
+        let grown = d.get(id).unwrap().bounds();
+        d.restack();
+        assert_eq!(d.get(id).unwrap().bounds(), grown);
+        assert_eq!(d.get(other).unwrap().bounds(), other_before, "the other picture was pushed");
         // One background: a board's layout ignores the frame.
         d.frame.enabled = true;
         assert_eq!(d.layout().canvas, d.size);
