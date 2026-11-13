@@ -6,8 +6,12 @@
 //! The app lists the frames it wants (most urgent first); the worker decodes short runs
 //! with a fast keyframe seek (recordings have a keyframe every second) and drops frames
 //! that are no longer wanted.
+//!
+//! Playback frames are decoded at `PLAY_WIDTH` (sharp on a typical preview, cheap enough to
+//! keep a few seconds around). When paused, a second worker decodes the one frame under the
+//! playhead at the recording's own resolution (up to `STILL_MAX_WIDTH`), so a still or a
+//! zoomed-in frame shows every source pixel.
 
-use crate::export::PREVIEW_WIDTH;
 use crate::recorder::FPS;
 use gpui::RenderImage;
 use std::collections::HashMap;
@@ -19,8 +23,12 @@ use std::sync::{Arc, Condvar, Mutex};
 
 /// Frames decoded per run (1.5 s).
 const CHUNK: u64 = 45;
-/// Most frames kept (~1 MB each).
-const CAP: usize = 150;
+/// Width of playback frames (never more than the source).
+const PLAY_WIDTH: u32 = 1280;
+/// Memory for playback frames; the frame count follows from their size (~100 at 1280×800).
+const CAP_BYTES: usize = 420 << 20;
+/// Full-resolution stills are capped at this width (5K and up would cost more than they show).
+const STILL_MAX_WIDTH: u32 = 3840;
 
 #[derive(Default)]
 struct Shared {
@@ -31,6 +39,11 @@ struct Shared {
     stop: AtomicBool,
     /// Frames dropped from the cache, for the UI thread to free on the GPU.
     evicted: Mutex<Vec<Arc<RenderImage>>>,
+    /// The paused frame wanted at full resolution, and the last one decoded.
+    still_want: Mutex<Option<u64>>,
+    still_wake: Condvar,
+    /// `(frame, image)`; no image when the frame couldn't be decoded (past the end).
+    still: Mutex<Option<(u64, Option<Arc<RenderImage>>)>>,
 }
 
 pub struct FrameCache {
@@ -43,9 +56,29 @@ impl FrameCache {
     pub fn new(raw: PathBuf, width: u32, height: u32, v_start: f64, frame_count: u64) -> Self {
         let shared = Arc::new(Shared::default());
         let s = shared.clone();
-        let (w, h) = (PREVIEW_WIDTH, ((PREVIEW_WIDTH as f64 * height as f64 / width.max(1) as f64 / 2.0).round() as u32 * 2).max(2));
-        std::thread::spawn(move || worker(s, raw, w, h, v_start, frame_count));
+        let (w, h) = fit(width, height, PLAY_WIDTH);
+        let cap = (CAP_BYTES / (w as usize * h as usize * 4).max(1)).clamp(CHUNK as usize * 2, 400);
+        let raw2 = raw.clone();
+        std::thread::spawn(move || worker(s, raw, w, h, cap, v_start, frame_count));
+        let s = shared.clone();
+        let (sw, sh) = fit(width, height, STILL_MAX_WIDTH);
+        std::thread::spawn(move || still_worker(s, raw2, sw, sh, v_start, frame_count));
         Self { shared }
+    }
+
+    /// Ask for frame `i` at full resolution (`None` while playing: playback frames suffice).
+    pub fn want_still(&self, i: Option<u64>) {
+        if let Ok(mut w) = self.shared.still_want.lock() {
+            if *w != i {
+                *w = i;
+                self.shared.still_wake.notify_one();
+            }
+        }
+    }
+
+    /// Frame `i` at full resolution: `None` while it's decoding, `Some(None)` if it couldn't be.
+    pub fn still(&self, i: u64) -> Option<Option<Arc<RenderImage>>> {
+        self.shared.still.lock().ok()?.as_ref().filter(|(k, _)| *k == i).map(|(_, f)| f.clone())
     }
 
     /// The frame at index `i` (time `i / FPS`), if decoded.
@@ -72,13 +105,50 @@ impl FrameCache {
     pub fn close(self) -> Vec<Arc<RenderImage>> {
         self.shared.stop.store(true, Ordering::SeqCst);
         self.shared.wake.notify_one();
+        self.shared.still_wake.notify_one();
         let mut all: Vec<_> = self.shared.frames.lock().map(|mut f| f.drain().map(|(_, v)| v).collect()).unwrap_or_default();
+        all.extend(self.shared.still.lock().ok().and_then(|mut s| s.take()).and_then(|(_, f)| f));
         all.extend(self.take_evicted());
         all
     }
 }
 
-fn worker(s: Arc<Shared>, raw: PathBuf, w: u32, h: u32, v_start: f64, frame_count: u64) {
+/// `width`×`height` scaled down to at most `max_w` wide (even sizes, never upscaled).
+fn fit(width: u32, height: u32, max_w: u32) -> (u32, u32) {
+    let w = (width.min(max_w) / 2 * 2).max(2);
+    let h = ((w as f64 * height as f64 / width.max(1) as f64 / 2.0).round() as u32 * 2).max(2);
+    (w, h)
+}
+
+/// Decodes the wanted still, one at a time; a newer request replaces an older one.
+fn still_worker(s: Arc<Shared>, raw: PathBuf, w: u32, h: u32, v_start: f64, frame_count: u64) {
+    loop {
+        let next = {
+            let mut want = s.still_want.lock().unwrap();
+            loop {
+                if s.stop.load(Ordering::SeqCst) {
+                    return;
+                }
+                let have = s.still.lock().unwrap().as_ref().map(|(k, _)| *k);
+                match *want {
+                    Some(i) if i < frame_count && have != Some(i) => break i,
+                    _ => want = s.still_wake.wait(want).unwrap(),
+                }
+            }
+        };
+        let frame = decode(&raw, w, h, v_start, next, 1).into_iter().next();
+        if s.stop.load(Ordering::SeqCst) {
+            return;
+        }
+        // Nothing decoded (past the end) is kept as such, so it isn't asked for again.
+        let old = s.still.lock().unwrap().replace((next, frame));
+        if let Some((_, Some(old))) = old {
+            s.evicted.lock().unwrap().push(old);
+        }
+    }
+}
+
+fn worker(s: Arc<Shared>, raw: PathBuf, w: u32, h: u32, cap: usize, v_start: f64, frame_count: u64) {
     loop {
         // The first wanted frame that isn't decoded yet.
         let next = {
@@ -111,11 +181,11 @@ fn worker(s: Arc<Shared>, raw: PathBuf, w: u32, h: u32, v_start: f64, frame_coun
             have.entry(next + k as u64).or_insert(img);
         }
         // Over the cap: drop the frames farthest from what's wanted.
-        if have.len() > CAP {
+        if have.len() > cap {
             let center = want.first().copied().unwrap_or(next) as i64;
             let mut keys: Vec<u64> = have.keys().copied().filter(|k| !want.contains(k)).collect();
             keys.sort_by_key(|k| std::cmp::Reverse((*k as i64 - center).abs()));
-            let excess = have.len() - CAP;
+            let excess = have.len() - cap;
             let mut ev = s.evicted.lock().unwrap();
             for k in keys.into_iter().take(excess) {
                 if let Some(img) = have.remove(&k) {
@@ -136,7 +206,7 @@ fn decode(raw: &std::path::Path, w: u32, h: u32, v_start: f64, first: u64, count
     let child = Command::new("ffmpeg")
         .args(["-hide_banner", "-v", "error", "-nostdin", "-seek_timestamp", "1", "-ss", &format!("{:.6}", v_start + t), "-i"])
         .arg(raw)
-        .args(["-an", "-frames:v", &count.to_string(), "-vf", &format!("fps={FPS},scale={w}:{h}:flags=bilinear"), "-pix_fmt", "bgra", "-f", "rawvideo", "-"])
+        .args(["-an", "-frames:v", &count.to_string(), "-vf", &format!("fps={FPS},scale={w}:{h}:flags={}", if count == 1 { "lanczos" } else { "bilinear" }), "-pix_fmt", "bgra", "-f", "rawvideo", "-"])
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn();

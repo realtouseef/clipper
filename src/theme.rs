@@ -167,8 +167,8 @@ macro_rules! tokens {
     ($($name:ident),*) => { $( #[inline] pub fn $name() -> u32 { palette().$name } )* };
 }
 tokens!(
-    bg, card, raised, hover, pressed, text, muted, text_soft, line, green, green_hover, green_pressed, on_green, green_ink,
-    red, red_deep, red_deep_hover, warn, warn_bg, error, zoom_bg, zoom_line
+    bg, card, raised, hover, pressed, text, muted, text_soft, line, green, on_green, green_ink,
+    red, warn, warn_bg, error, zoom_bg, zoom_line
 );
 
 /// An overlay at `alpha`: white on dark, black on light (hairlines, faint washes, outlines).

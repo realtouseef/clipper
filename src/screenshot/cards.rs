@@ -49,15 +49,12 @@ struct Card {
 
 /// A short message under the cards (one at a time; the undo toast takes precedence).
 enum Notice {
-    /// This screenshot was just copied to the clipboard.
-    Copied(PathBuf),
     Error(String),
 }
 
 impl Notice {
     fn lasts(&self) -> Duration {
         match self {
-            Notice::Copied(_) => COPIED,
             Notice::Error(_) => UNDO,
         }
     }
@@ -69,6 +66,9 @@ pub struct Cards {
     display: Display,
     last_tick: Instant,
     notice: Option<(Notice, Instant)>,
+    /// The screenshot just copied: its copy button shows a tick (no toast, so the window
+    /// keeps its size and the cards don't move).
+    copied: Option<(PathBuf, Instant)>,
 }
 
 struct Open(Option<(AnyWindowHandle, Entity<Cards>)>);
@@ -121,7 +121,7 @@ fn open_with(new_cards: Vec<Card>, notice: Option<Notice>, display: Display, cx:
         ..Default::default()
     };
     let opened = gpui_kit::open_window(options, cx, move |window, cx| {
-        let entity = cx.new(|_| Cards { cards: entity_cards, toast: None, display, last_tick: Instant::now(), notice });
+        let entity = cx.new(|_| Cards { cards: entity_cards, toast: None, display, last_tick: Instant::now(), notice, copied: None });
         crate::selector::overlay_window(window, 25, false, frame(&display, height_of(n, has_notice)));
         entity
     });
@@ -211,6 +211,10 @@ impl Cards {
         if self.notice.as_ref().is_some_and(|(n, at)| at.elapsed() >= n.lasts()) {
             self.notice = None;
         }
+        if self.copied.as_ref().is_some_and(|(_, at)| at.elapsed() >= COPIED) {
+            self.copied = None;
+            cx.notify();
+        }
         let after = (self.cards.len(), self.toast.is_some(), self.notice.is_some());
         // The undo toast counts down: redraw when its seconds change.
         if before != after || countdown != self.toast_seconds() {
@@ -263,13 +267,17 @@ impl Cards {
 
     fn copy(&mut self, path: PathBuf, cx: &mut Context<Self>) {
         let result = editor::baked(&path).and_then(|img| editor::copy_image(&img, cx));
-        let notice = match result {
-            Ok(()) => Notice::Copied(path),
-            Err(e) => Notice::Error(e.to_string()),
-        };
-        self.notice = Some((notice, Instant::now()));
-        cx.notify();
-        cx.defer(relayout);
+        match result {
+            Ok(()) => {
+                self.copied = Some((path, Instant::now()));
+                cx.notify();
+            }
+            Err(e) => {
+                self.notice = Some((Notice::Error(e.to_string()), Instant::now()));
+                cx.notify();
+                cx.defer(relayout);
+            }
+        }
     }
 
     fn save_as(&mut self, path: PathBuf, cx: &mut Context<Self>) {
@@ -302,7 +310,7 @@ impl Cards {
         let path = c.path.clone();
         let (p1, p2, p3, p4, p5, p6) = (path.clone(), path.clone(), path.clone(), path.clone(), path.clone(), path.clone());
         let name = time_label(path.file_stem().and_then(|n| n.to_str()).unwrap_or(""));
-        let copied = matches!(&self.notice, Some((Notice::Copied(p), _)) if *p == path);
+        let copied = self.copied.as_ref().is_some_and(|(p, _)| *p == path);
         let icon_btn = |id: String, icon: gpui_kit::component::Icon, tip: &'static str| {
             Button::new(gpui_kit::SharedString::from(id)).cursor_pointer().ghost().xsmall().rounded_full().icon(icon).tooltip(tip)
         };
@@ -331,7 +339,7 @@ impl Cards {
                 })),
             )
             .child(div().flex_1().min_w_0().px(px(ui::S2)).text_xs().text_color(rgb(tk::muted())).truncate().child(name))
-            .child(icon_btn(format!("copy-{i}"), if copied { icons::check() } else { icons::copy() }, "Copy to clipboard").when(copied, |b| b.text_color(rgb(tk::green_ink()))).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+            .child(icon_btn(format!("copy-{i}"), if copied { icons::check() } else { icons::copy() }, if copied { "Copied" } else { "Copy to clipboard" }).when(copied, |b| b.text_color(rgb(tk::green_ink()))).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                 cx.stop_propagation();
                 this.copy(p3.clone(), cx)
             })))
@@ -411,8 +419,6 @@ impl Render for Cards {
                             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.undo(cx))),
                     ),
             );
-        } else if let Some((Notice::Copied(_), _)) = &self.notice {
-            col = col.child(ui::toast_pill().pl(px(ui::S2)).pr(px(ui::S4)).child(tick(tk::green_ink())).child("Copied to clipboard"));
         } else if let Some((Notice::Error(msg), _)) = &self.notice {
             col = col.child(
                 ui::toast_pill()

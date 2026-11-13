@@ -70,11 +70,13 @@ pub fn render(doc: &Document, base: &RgbaImage, scale: f32, cache: &Cache) -> Rg
 }
 
 pub fn render_pixmap(doc: &Document, base: &RgbaImage, scale: f32, cache: &Cache) -> Pixmap {
-    let content = render_content(doc, base, scale, cache);
     // A board paints the background itself (see `Document::layout`): one background only.
     if !doc.frame.enabled || doc.board.is_some() {
-        return content;
+        return render_content(doc, base, scale, cache);
     }
+    // Inside a frame the content is drawn at the frame's scale straight away, so the
+    // screenshot is resampled once (from the original) instead of rendered and shrunk again.
+    let content = render_content(doc, base, scale * doc.layout().scale, cache);
     compose_frame(doc, &content, scale, cache)
 }
 
@@ -109,7 +111,9 @@ fn base_pixmap(doc: &Document, base: &RgbaImage, scale: f32, cache: &Cache) -> (
     let img = oriented(base, doc.orient);
     let img = if k < 1.0 {
         let (w, h) = (((img.width() as f32 * k).round() as u32).max(1), ((img.height() as f32 * k).round() as u32).max(1));
-        image::imageops::resize(&img, w, h, image::imageops::FilterType::Triangle)
+        // Catmull-Rom keeps text and UI edges crisp when shrinking a screenshot (a tent
+        // filter visibly softens them).
+        image::imageops::resize(&img, w, h, image::imageops::FilterType::CatmullRom)
     } else {
         img
     };
@@ -950,14 +954,10 @@ fn compose_window(doc: &Document, mut pm: Pixmap, content: &Pixmap, win_path: &t
         }
     }
 
+    // `content` is already at the frame's scale: place it pixel for pixel.
     let c = scaled(lay.content, s);
-    let t = Transform::from_row(lay.scale, 0.0, 0.0, lay.scale, c.x, c.y);
-    let quality = if (lay.scale - 1.0).abs() < 1e-4 && c.x.fract() == 0.0 && c.y.fract() == 0.0 {
-        FilterQuality::Nearest
-    } else {
-        FilterQuality::Bilinear
-    };
-    pm.draw_pixmap(0, 0, content.as_ref(), &PixmapPaint { quality, ..Default::default() }, t, Some(&clip));
+    let t = Transform::from_translate(c.x.round(), c.y.round());
+    pm.draw_pixmap(0, 0, content.as_ref(), &PixmapPaint { quality: FilterQuality::Nearest, ..Default::default() }, t, Some(&clip));
 
     if f.inset {
         let wd = (1.5 * s).max(1.0);

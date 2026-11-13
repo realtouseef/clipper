@@ -596,7 +596,7 @@ impl Clipper {
                 // Paused on a frame that was still decoding: show it once it's there.
                 if !self.showing_exact && !self.playing {
                     let k = (self.playhead * recorder::FPS as f64 + 1e-6) as u64;
-                    if self.frame_cache.as_ref().is_some_and(|c| c.get(k).is_some()) {
+                    if self.frame_cache.as_ref().is_some_and(|c| c.still(k).is_some() || c.get(k).is_some()) {
                         cx.notify();
                     }
                 }
@@ -1249,9 +1249,14 @@ impl Clipper {
                         std::iter::once(k).chain((1..=15).flat_map(|j| [k + j, k.saturating_sub(j)])).collect()
                     };
                     c.want(want);
-                    c.get(k)
+                    // Paused: the frame at the recording's full resolution once it's decoded.
+                    c.want_still((!self.playing).then_some(k));
+                    let still = if self.playing { None } else { c.still(k) };
+                    let best = still.is_some() || self.playing;
+                    still.flatten().or_else(|| c.get(k)).map(|f| (f, best))
                 });
-                self.showing_exact = exact.is_some();
+                self.showing_exact = exact.as_ref().is_some_and(|(_, best)| *best);
+                let exact = exact.map(|(f, _)| f);
                 let screen_frame = exact.unwrap_or_else(|| preview.frames[idx].clone());
                 let cam = match (&rec.webcam, &self.cam_frames) {
                     (Some(track), Some(frames)) if track.active_at(t) => {

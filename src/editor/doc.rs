@@ -390,12 +390,6 @@ impl ImageLayer {
     pub fn oriented_size(&self) -> (u32, u32) {
         if self.orient.quarter % 2 == 1 { (self.natural.1, self.natural.0) } else { self.natural }
     }
-
-    /// Canvas point → picture pixel (oriented).
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn to_source(&self, q: P) -> P {
-        self.rect.map(q, &self.crop)
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default, Hash)]
